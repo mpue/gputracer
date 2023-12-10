@@ -59,6 +59,9 @@
     <Text Include="fragment.frag">
       <Filter>Quelldateien</Filter>
     </Text>
+    <Text Include="patterns.comp">
+      <Filter>Quelldateien</Filter>
+    </Text>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\imconfig.h">
@@ -74,9 +77,6 @@
       <Filter>Quelldateien</Filter>
     </ClInclude>
     <ClInclude Include="..\include\imgui_impl_opengl3_loader.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\imgui_internal.h">
       <Filter>Quelldateien</Filter>
     </ClInclude>
     <ClInclude Include="..\include\imstb_rectpack.h">
@@ -95,6 +95,9 @@
       <Filter>Quelldateien</Filter>
     </ClInclude>
     <ClInclude Include="TextEditor.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui_internal.h">
       <Filter>Quelldateien</Filter>
     </ClInclude>
   </ItemGroup>

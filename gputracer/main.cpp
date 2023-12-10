@@ -34,6 +34,10 @@ vec3 campos;
 
 TextEditor* editor = nullptr;
 
+bool editor_open = true;
+bool output_open = true;
+bool settings_open = true;
+
 // settings
 const unsigned int SCR_WIDTH = 1920;
 const unsigned int SCR_HEIGHT = 1200;
@@ -75,6 +79,7 @@ struct FragUBO
 
 const double PI = 3.14159265358979323846;
 
+ImFont* editorFont;
 ImFont* defaultFont;
 
 float specStrength = 1.0f;
@@ -133,16 +138,20 @@ int main(int argc, char* argv[])
 	(void)io;
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-	defaultFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 18.0f);
+	editorFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 18.0f);
+	defaultFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\arial.ttf", 20.0f);
 
 	// Setup Dear ImGui style
-	ImGui::StyleColorsClassic();
+	ImGui::StyleColorsDark();
 	// ImGui::StyleColorsLight();
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 130");
+
+	
 
 	editor = new TextEditor();
 	// query limitations
@@ -241,7 +250,8 @@ int main(int argc, char* argv[])
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
-		
+		ImGui::DockSpaceOverViewport();	
+	
 		// Set frame time
 		float currentFrame = glfwGetTime();
 		deltaTime = currentFrame - lastFrame;
@@ -329,11 +339,12 @@ int main(int argc, char* argv[])
 
 		// render image to quad
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		screenQuad.use();
+		//screenQuad.use();
+		//renderQuad();
 
-		renderQuad();
+		ImGui::PushFont(defaultFont);
 
-		ImGui::Begin("Settings");
+		ImGui::Begin("Settings",&settings_open);
 
 		if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
 		{
@@ -366,10 +377,15 @@ int main(int argc, char* argv[])
 
 		ImGui::End();
 
-		ImGui::PushFont(defaultFont);
-		ImGui::Begin("Shader code");
+		ImGui::Begin("Output",&output_open);
+		ImGui::Image((void*)(intptr_t)texture, ImVec2(SCR_WIDTH,SCR_HEIGHT));
+		ImGui::End();
+
+		ImGui::PushFont(editorFont);
+		ImGui::Begin("Shader code",&editor_open);
 		editor->Render("Shader");
 		ImGui::End();
+		ImGui::PopFont();
 		ImGui::PopFont();
 
 		ImGui::Render();
@@ -467,21 +483,27 @@ void processInput(GLFWwindow* window)
 		camera.ProcessKeyboard(RIGHT, deltaTime);
 	if ((glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS))
 		recompileShader();
-	if ((glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS))
+	if ((glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS))
 	{
 		computeShader = ComputeShader("compute.comp");
 		editor->SetText(computeShader.computeCode);
 	}
-	if ((glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS))
+	if ((glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS))
 	{
 		computeShader = ComputeShader("mandelbulb.comp");
 		editor->SetText(computeShader.computeCode);
 	}
-	if ((glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS))
+	if ((glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS))
 	{
 		computeShader = ComputeShader("helix.comp");
 		editor->SetText(computeShader.computeCode);
 	}
+	if ((glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS))
+	{
+		computeShader = ComputeShader("patterns.comp");
+		editor->SetText(computeShader.computeCode);
+	}
+
 }
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)

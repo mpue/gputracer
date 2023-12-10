@@ -604,6 +604,10 @@ void TextEditor::Render(const char* aTitle, const ImVec2& aSize, bool aBorder)
 				mState.mCursorPosition = mInteractiveEnd = SanitizeCoordinates(ScreenPosToCoordinates(ImGui::GetMousePos()));
 				SetSelection(mInteractiveStart, mInteractiveEnd, mSelectionMode);
 			}
+
+			if (click || doubleClick || tripleClick) {
+				focused = true;
+			}
 		}
 	}
 
@@ -853,6 +857,10 @@ void TextEditor::SetText(const std::string & aText)
 
 void TextEditor::EnterCharacter(Char aChar)
 {
+	if (!focused) {
+		return;
+	}
+
 	assert(!mReadOnly);
 
 	UndoRecord u;
@@ -2237,4 +2245,12 @@ TextEditor::LanguageDefinition TextEditor::LanguageDefinition::Lua()
 		inited = true;
 	}
 	return langDef;
+}
+
+void TextEditor::setFocus(bool focus) {
+	this->focused = focus;
+}
+
+bool TextEditor::hasFocus() {
+	return this->focused;
 }

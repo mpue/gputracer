@@ -226,6 +226,9 @@ public:
 
 	void EnterCharacter(Char aChar);
 
+	void setFocus(bool focus);
+	bool hasFocus();
+
 private:
 	typedef std::vector<std::pair<std::regex, PaletteIndex>> RegexList;
 
@@ -325,5 +328,7 @@ private:
 	ErrorMarkers mErrorMarkers;
 	ImVec2 mCharAdvance;
 	Coordinates mInteractiveStart, mInteractiveEnd;
+
+	bool focused = false;
 };
 

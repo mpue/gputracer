@@ -14,6 +14,9 @@
 #include "ComputeShader.h"
 
 #include <iostream>
+#include <random>
+
+#include "TextEditor.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void renderQuad();
@@ -21,11 +24,15 @@ void processInput(GLFWwindow* window);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-
+void myKeyCallbackFunc(GLFWwindow* window, int key, int scancode, int action, int mods);
+void character_callback(GLFWwindow* window, unsigned int codepoint);
+void recompileShader();
 using namespace glm;
 
 Camera camera;
 vec3 campos;
+
+TextEditor* editor = nullptr;
 
 // settings
 const unsigned int SCR_WIDTH = 1920;
@@ -44,15 +51,17 @@ bool navigate_mouse = false;
 // texture size
 const unsigned int TEXTURE_WIDTH = 1920, TEXTURE_HEIGHT = 1200;
 
-
-struct Sphere {
+struct Sphere
+{
 	glm::vec3 position;
 	float radius;
 	glm::vec3 color;
 	glm::vec3 normal;
+	uint type;
 };
 
-struct Light {
+struct Light
+{
 	glm::vec3 position;
 	glm::vec3 color;
 };
@@ -62,20 +71,26 @@ struct FragUBO
 	mat4 invProjectionView;
 	float near;
 	float far;
-}
-ubo;
+} ubo;
 
 const double PI = 3.14159265358979323846;
 
+ImFont* defaultFont;
+
 float specStrength = 1.0f;
 float exponent = 64.0;
+float speed = 1.0;
 
-double generateSineWave(double frequency, double amplitude, double time) {
+ComputeShader computeShader;
+
+double generateSineWave(double frequency, double amplitude, double time)
+{
 	return amplitude * std::sin(2 * PI * frequency * time);
 }
 
 int main(int argc, char* argv[])
 {
+
 	// glfw: initialize and configure
 	// ------------------------------
 	glfwInit();
@@ -99,6 +114,7 @@ int main(int argc, char* argv[])
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetCharCallback(window, character_callback);
 	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetMouseButtonCallback(window, mouse_button_callback);
 	glfwSwapInterval(0);
@@ -113,29 +129,30 @@ int main(int argc, char* argv[])
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+	ImGuiIO& io = ImGui::GetIO();
+	(void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
 
-	io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\segoeui.ttf", 18.0f);
-
+	defaultFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 18.0f);
 
 	// Setup Dear ImGui style
 	ImGui::StyleColorsClassic();
-	//ImGui::StyleColorsLight();
+	// ImGui::StyleColorsLight();
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
 	ImGui_ImplOpenGL3_Init("#version 130");
 
-
+	editor = new TextEditor();
 	// query limitations
 	// -----------------
 	int max_compute_work_group_count[3];
 	int max_compute_work_group_size[3];
 	int max_compute_work_group_invocations;
 
-	for (int idx = 0; idx < 3; idx++) {
+	for (int idx = 0; idx < 3; idx++)
+	{
 		glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, idx, &max_compute_work_group_count[idx]);
 		glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, idx, &max_compute_work_group_size[idx]);
 	}
@@ -155,7 +172,9 @@ int main(int argc, char* argv[])
 	// build and compile shaders
 	// -------------------------
 	Shader screenQuad("vertex.vert", "fragment.frag");
-	ComputeShader computeShader("compute.comp");
+	computeShader = ComputeShader("mandelbulb.comp");
+
+	editor->SetText(computeShader.computeCode);
 
 	screenQuad.use();
 	screenQuad.setInt("tex", 0);
@@ -180,35 +199,34 @@ int main(int argc, char* argv[])
 
 	Light* lights = new Light[1];
 	lights[0] = Light();
-	lights[0].color = glm::vec3(0.5, 0.5, 0.5);
-	lights[0].position = glm::vec3(-10,10,-10);
+	lights[0].color = glm::vec3(1, 1, 1);
+	lights[0].position = glm::vec3(-10, 10, -10);
 
 	Sphere* spheres = new Sphere[100];
 
+	std::random_device rd;  // Obtain a random number from hardware
+	std::mt19937 eng(rd()); // Seed the generator
+	std::uniform_real_distribution<> distr(0.1, 1.0); // Define the range
+
 	int i = 0;
 
-	for (int y = 0; y < 10; y++) {
-		for (int x = 0; x < 10;x++) {
+	for (int y = 0; y < 10; y++)
+	{
+		for (int x = 0; x < 10; x++)
+		{
 			spheres[i] = Sphere();
-			spheres[i].color = glm::vec3(0.1*x, 0.1 * y, 0);
+			spheres[i].color = glm::vec3(0.1 * x, 0.1 * y, 0);
 			spheres[i].radius = 1.0f;
 			spheres[i].position = glm::vec3(2 * x, 0, 2 * y);
+			spheres[i].type = 0;
 			i++;
 		}
 	}
-	
-
-	//GLuint lightBuffer;
-	//glGenBuffers(1, &lightBuffer);
-	//glBindBuffer(GL_UNIFORM_BUFFER, lightBuffer);
-	//glBufferData(GL_UNIFORM_BUFFER, sizeof(Sphere) * 1, spheres, GL_DYNAMIC_DRAW);
-	//glBindBufferBase(GL_UNIFORM_BUFFER, 0, lightBuffer);
 
 	GLuint _ubo;
 	glGenBuffers(1, &_ubo);
 
 	campos = vec3(0.0f, 0, 2);
-
 
 	camera = Camera(campos, vec3(0, 1, 0));
 
@@ -223,7 +241,7 @@ int main(int argc, char* argv[])
 		ImGui_ImplOpenGL3_NewFrame();
 		ImGui_ImplGlfw_NewFrame();
 		ImGui::NewFrame();
-
+		
 		// Set frame time
 		float currentFrame = glfwGetTime();
 		deltaTime = currentFrame - lastFrame;
@@ -231,17 +249,19 @@ int main(int argc, char* argv[])
 
 		processInput(window);
 
-		if (fCounter > 500) {
+		if (fCounter > 500)
+		{
 			std::cout << "FPS: " << 1 / deltaTime << "\r";
 			fCounter = 0;
 		}
-		else {
+		else
+		{
 			fCounter++;
 		}
 
 		computeShader.use();
 		vec3 firstPersonDirection = glm::vec3(0, 0, 1);
-		
+
 		vec3 firstPersonUp = glm::vec3(0, 1, 0);
 		// mat4 view = lookAt(campos, campos + firstPersonDirection, firstPersonUp);
 
@@ -268,14 +288,17 @@ int main(int argc, char* argv[])
 		glBindBuffer(GL_UNIFORM_BUFFER, _ubo);
 		glBufferData(GL_UNIFORM_BUFFER, sizeof(FragUBO), (void*)&ubo, GL_DYNAMIC_DRAW);
 		glBindBufferBase(GL_UNIFORM_BUFFER, 1, _ubo);
+
 		computeShader.setInt("numLights", 1);
 		computeShader.setInt("numSpheres", 100);
 		computeShader.setFloat("specStrength", specStrength);
 		computeShader.setFloat("exponent", exponent);
-		
+		computeShader.setFloat("time", time);
+		computeShader.setFloat("speed", speed);
 
 		// Upload sphere data
-		for (int i = 0; i < 100; ++i) {
+		for (int i = 0; i < 100; ++i)
+		{
 			float wave = generateSineWave(i * 0.01, 1, time);
 			spheres[i].position.y = wave;
 			// Construct uniform name, e.g., "spheres[0].position"
@@ -284,14 +307,15 @@ int main(int argc, char* argv[])
 			uniformName = "spheres[" + std::to_string(i) + "].color";
 			glUniform3fv(glGetUniformLocation(computeShader.ID, uniformName.c_str()), 1, glm::value_ptr(spheres[i].color));
 			uniformName = "spheres[" + std::to_string(i) + "].radius";
-			computeShader.setFloat(uniformName.c_str(),spheres[i].radius);
-
-			// Similarly upload other properties like radius, color, etc.
+			computeShader.setFloat(uniformName.c_str(), spheres[i].radius);
+			uniformName = "spheres[" + std::to_string(i) + "].type";
+			computeShader.setInt(uniformName.c_str(), spheres[i].type);
 		}
 
-		time += 0.0001;
+		time += deltaTime * speed;
 		// Upload light data
-		for (int i = 0; i < 1; ++i) {
+		for (int i = 0; i < 1; ++i)
+		{
 			std::string uniformName = "lights[" + std::to_string(i) + "].position";
 			glUniform3fv(glGetUniformLocation(computeShader.ID, uniformName.c_str()), 1, glm::value_ptr(lights[i].position));
 			uniformName = "lights[" + std::to_string(i) + "].color";
@@ -299,7 +323,6 @@ int main(int argc, char* argv[])
 		}
 
 		glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
-		
 
 		// make sure writing to image has finished before read
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -312,40 +335,45 @@ int main(int argc, char* argv[])
 
 		ImGui::Begin("Settings");
 
-		if (ImGui::DragFloat("Specular strength", (float*)&specStrength)) {
-
+		if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
+		{
 		}
-		if (ImGui::DragFloat("Specular exponent", (float*)&exponent)) {
-
+		if (ImGui::DragFloat("Specular exponent", (float*)&exponent))
+		{
 		}
-
-
-		if (ImGui::DragFloat3("Light position", (float*)&lights[0].position)) {
-		}
-
-		if (ImGui::DragFloat3("Camera position", (float*)&campos)) {
-
+		if (ImGui::DragFloat("Speed", (float*)&speed))
+		{
 		}
 
-
-		if (ImGui::DragFloat3("Sphere position 0", (float*)&spheres[0].position)) {
-
-		}
-		if (ImGui::ColorEdit3("Sphere color 0", (float*)&spheres[0].color)) {
-
+		if (ImGui::DragFloat3("Light position", (float*)&lights[0].position))
+		{
 		}
 
-
-		if (ImGui::DragFloat3("Sphere position 1", (float*)&spheres[1].position)) {
-
+		if (ImGui::DragFloat3("Camera position", (float*)&campos))
+		{
 		}
 
+		if (ImGui::DragFloat3("Sphere position 0", (float*)&spheres[0].position))
+		{
+		}
+		if (ImGui::ColorEdit3("Sphere color 0", (float*)&spheres[0].color))
+		{
+		}
 
+		if (ImGui::DragFloat3("Sphere position 1", (float*)&spheres[1].position))
+		{
+		}
 
 		ImGui::End();
+
+		ImGui::PushFont(defaultFont);
+		ImGui::Begin("Shader code");
+		editor->Render("Shader");
+		ImGui::End();
+		ImGui::PopFont();
+
 		ImGui::Render();
 		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
 
 		// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
 		// -------------------------------------------------------------------------------
@@ -363,7 +391,6 @@ int main(int argc, char* argv[])
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 
-
 	glfwTerminate();
 
 	return EXIT_SUCCESS;
@@ -379,10 +406,26 @@ void renderQuad()
 	{
 		float quadVertices[] = {
 			// positions        // texture Coords
-			-1.0f,  1.0f, 0.0f, 0.0f, 1.0f,
-			-1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-			 1.0f,  1.0f, 0.0f, 1.0f, 1.0f,
-			 1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+			-1.0f,
+			1.0f,
+			0.0f,
+			0.0f,
+			1.0f,
+			-1.0f,
+			-1.0f,
+			0.0f,
+			0.0f,
+			0.0f,
+			1.0f,
+			1.0f,
+			0.0f,
+			1.0f,
+			1.0f,
+			1.0f,
+			-1.0f,
+			0.0f,
+			1.0f,
+			0.0f,
 		};
 		// setup plane VAO
 		glGenVertexArrays(1, &quadVAO);
@@ -404,7 +447,7 @@ void renderQuad()
 // ---------------------------------------------------------------------------------------------
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-	// make sure the viewport matches the new window dimensions; note that width and 
+	// make sure the viewport matches the new window dimensions; note that width and
 	// height will be significantly larger than specified on retina displays.
 	glViewport(0, 0, width, height);
 }
@@ -422,6 +465,23 @@ void processInput(GLFWwindow* window)
 		camera.ProcessKeyboard(LEFT, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		camera.ProcessKeyboard(RIGHT, deltaTime);
+	if ((glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS))
+		recompileShader();
+	if ((glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS))
+	{
+		computeShader = ComputeShader("compute.comp");
+		editor->SetText(computeShader.computeCode);
+	}
+	if ((glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS))
+	{
+		computeShader = ComputeShader("mandelbulb.comp");
+		editor->SetText(computeShader.computeCode);
+	}
+	if ((glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS))
+	{
+		computeShader = ComputeShader("helix.comp");
+		editor->SetText(computeShader.computeCode);
+	}
 }
 
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
@@ -443,7 +503,8 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 	lastX = xpos;
 	lastY = ypos;
 
-	if (navigate_mouse) {
+	if (navigate_mouse)
+	{
 		camera.ProcessMouseMovement(xoffset, yoffset);
 	}
 }
@@ -461,5 +522,19 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		navigate_mouse = true;
 	else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE)
 		navigate_mouse = false;
+}
+void character_callback(GLFWwindow* window, unsigned int c)
+{
+	if (isprint(c) || isspace(c))
+	{
+		editor->EnterCharacter(char(c));
+	}
+}
 
+void myKeyCallbackFunc(GLFWwindow* window, int key, int scancode, int action, int mods) {
+}
+
+void recompileShader() {
+	computeShader.computeCode = editor->GetText().c_str();
+	computeShader.compile();
 }

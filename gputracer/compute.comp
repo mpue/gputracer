@@ -21,10 +21,12 @@ struct Ray {
 };
 
 struct HitRecord {
+  vec3 color;
   vec3 pos;
   vec3 normal;
   float distance;
   bool hit;
+  float reflectivity;
 };
 
 layout(local_size_x = 16, local_size_y = 16) in;
@@ -37,6 +39,11 @@ layout(binding = 1) uniform FragUBO {
 }
 ubo;
 
+struct Plane {
+  vec3 position;
+  vec3 normal;
+};
+
 uniform Sphere spheres[MAX_SPHERES];
 uniform int numSpheres;
 
@@ -45,67 +52,245 @@ uniform int numLights;
 
 uniform float specStrength;
 uniform float exponent;
+uniform float time;
+uniform float speed;
 
 vec3 ambient = vec3(0.2, 0.2, 0.2);
 
 vec3 phong(Light light, HitRecord r, vec4 camPos, vec3 objectColor) {
 
-    vec3 n =  r.normal;
-	vec3 s = normalize( light.position - r.pos );
-	vec3 v = normalize( camPos.xyz - r.pos);
-	vec3 refl = reflect( -s, n );
+  vec3 n = r.normal;
+  vec3 s = normalize(light.position - r.pos);
+  vec3 v = normalize(camPos.xyz - r.pos);
+  vec3 refl = reflect(-s, n);
 
-	ambient *= 0.5;
-	
-	float sDotN = max( dot( s, n ), 0.0 );
-	vec3 diffuse = vec3(0.5) * 0.7 * sDotN;
-	
-	float spec = specStrength * pow( max( dot(refl,v) , 0.0 ), exponent ); 
+  ambient *= 0.5;
 
-    vec3 result = (ambient + diffuse + spec) * objectColor;
+  float sDotN = max(dot(s, n), 0.0);
+  vec3 diffuse = vec3(0.5) * 0.7 * sDotN;
 
-    return result;
+  float spec = specStrength * pow(max(dot(refl, v), 0.0), exponent);
+
+  vec3 result = (ambient + diffuse + spec) * objectColor;
+
+  return result;
 }
 
+HitRecord rayPlaneIntersect(Ray ray, Sphere plane) {
 
-HitRecord raySphereIntersect(Ray ray,Sphere sphere) {
+  HitRecord r;
 
-    HitRecord r;
+  r.hit = false;
 
-    vec3 sphereToRay = ray.origin - sphere.position;
-    float a = dot(ray.direction, ray.direction);
-    float b = 2.0 * dot(sphereToRay, ray.direction);
-    float c = dot(sphereToRay, sphereToRay) - sphere.radius * sphere.radius;
-    float discriminant = b * b - 4.0 * a * c;
-    if (discriminant >= 0) {
-      float t1 = (-b - sqrt(discriminant)) / (2.0 * a);
-      float t2 = (-b + sqrt(discriminant)) / (2.0 * a);
-      float t = (t1 > 0.0 && t1 < t2) ? t1 : t2;
-      if (t > 0.0 && t2 > 0.0) { // Ensure t is positive
+  float denom = dot(ray.direction, plane.normal);
 
-        vec3 hitPos = ray.origin + ray.direction * t;
-        // Calculate the normal at the hit position
-        vec3 hitNormal = normalize(hitPos - sphere.position);
+  // Check if ray is parallel to the plane
+  if (abs(denom) > 0.0001) {
+    vec3 p0l0 = plane.position - ray.origin;
+    float t = dot(p0l0, plane.normal) / denom;
 
-        r.pos = hitPos;
-        r.normal = hitNormal;
-        r.hit = true;                
-        r.distance = t;
-        return r;
+    // Check if the intersection is in the positive direction of the ray
+    if (t >= 0.0) {
+      vec3 intersection = ray.origin + t * ray.direction;
+
+      r.pos = intersection;
+      r.hit = true;
+      r.distance = t;
+      r.normal = plane.normal;
+      return r;
+    }
+  }
+
+  return r;
+}
+
+HitRecord raySphereIntersect(Ray ray, Sphere sphere) {
+
+  HitRecord r;
+
+  vec3 sphereToRay = ray.origin - sphere.position;
+  float a = dot(ray.direction, ray.direction);
+  float b = 2.0 * dot(sphereToRay, ray.direction);
+  float c = dot(sphereToRay, sphereToRay) - sphere.radius * sphere.radius;
+  float discriminant = b * b - 4.0 * a * c;
+  if (discriminant >= 0) {
+    float t1 = (-b - sqrt(discriminant)) / (2.0 * a);
+    float t2 = (-b + sqrt(discriminant)) / (2.0 * a);
+    float t = (t1 > 0.0 && t1 < t2) ? t1 : t2;
+    if (t > 0.0 && t2 > 0.0) { // Ensure t is positive
+
+      vec3 hitPos = ray.origin + ray.direction * t;
+      // Calculate the normal at the hit position
+      vec3 hitNormal = normalize(hitPos - sphere.position);
+
+      r.pos = hitPos;
+      r.normal = hitNormal;
+      r.hit = true;
+      r.distance = t;
+      return r;
+    }
+  }
+
+  r.hit = false;
+  return r;
+}
+
+HitRecord findClosestIntersection(Ray ray) {
+  HitRecord closestHit;
+  closestHit.hit = false;
+  closestHit.distance = 100000000.0; // Use a very large number
+
+  for (int i = 0; i < numSpheres; i++) {
+    Sphere sphere = spheres[i];
+    HitRecord tempHit = raySphereIntersect(ray, sphere);
+    if (tempHit.hit && tempHit.distance < closestHit.distance) {
+      closestHit = tempHit;
+      closestHit.color =
+          sphere.color; // Assuming the sphere's color is its material color
+      closestHit.reflectivity = 0.00000001;
+    }
+  }
+
+  return closestHit;
+}
+
+float traceShadow(HitRecord r, vec4 camOrigin, int k) {
+  float shadow = 1.0;
+
+  HitRecord str;
+  str.distance = 100000000.0;
+
+  if (r.hit) {
+    for (int j = 0; j < numLights; j++) {
+      vec3 lightDir = normalize(lights[j].position - r.pos);
+      Ray shadowRay;
+      shadowRay.origin =
+          r.pos +
+          0.001 * lightDir; // Slightly offset to avoid self-intersection
+      shadowRay.direction = lightDir;
+      bool inShadow = false;
+
+      for (int n = 0; n < numSpheres; n++) {
+        if (n != k) { // Avoid self-intersection
+
+          HitRecord temp = raySphereIntersect(shadowRay, spheres[n]);
+          if (temp.hit && temp.distance < length(lights[j].position - r.pos)) {
+            inShadow = true;
+            break;
+          }
+        }
+      }
+
+      shadow = inShadow ? .1 : 1.0;
+    }
+  }
+  return shadow;
+}
+
+vec3 trace(Ray ray, vec4 camOrigin, uint depth) {
+  vec3 outColor = vec3(0.0);
+
+  HitRecord r;
+  r.distance = 100000000.0;
+
+  int k = 0;
+
+  for (int i = 0; i < numSpheres; i++) {
+
+    vec3 color = vec3(0.0, 0.0, 0.0);
+    Sphere sphere = spheres[i];
+
+    HitRecord tr = raySphereIntersect(ray, sphere);
+
+    if (tr.hit) {
+      if (tr.distance < r.distance) {
+        r = tr;
+        k = i;
       }
     }
+  }
 
-    r.hit  = false;
-    return r;
+  float shadow = 1.0;
+
+  HitRecord str;
+  str.distance = 100000000.0;
+
+  if (r.hit) {
+    for (int j = 0; j < numLights; j++) {
+      vec3 lightDir = normalize(lights[j].position - r.pos);
+      Ray shadowRay;
+      shadowRay.origin =
+          r.pos +
+          0.001 * lightDir; // Slightly offset to avoid self-intersection
+      shadowRay.direction = lightDir;
+      bool inShadow = false;
+
+      for (int n = 0; n < numSpheres; n++) {
+        if (n != k) { // Avoid self-intersection
+
+          HitRecord temp = raySphereIntersect(shadowRay, spheres[n]);
+          if (temp.hit && temp.distance < length(lights[j].position - r.pos)) {
+            inShadow = true;
+            break;
+          }
+        }
+      }
+
+      float shadowFactor = inShadow ? .1 : 1.0;
+      outColor +=
+          shadowFactor * phong(lights[j], r, camOrigin, spheres[k].color);
+    }
+  }
+  return outColor;
+}
+
+vec3 traceRay(Ray ray, vec3 camOrigin, vec3 color, int maxReflections) {
+
+  vec3 attenuation = vec3(1); // Start with full intensity
+
+  HitRecord hit;
+
+  for (int i = 0; i < maxReflections; ++i) {
+    hit = findClosestIntersection(ray);
+
+    if (!hit.hit) {
+      // If there's no hit, return the accumulated color (background color or
+      // ambient light can be added here)
+      return color;
+    }
+
+    // Calculate local color at the intersection point
+    for (int j = 0; j < numLights; ++j) {
+      color += attenuation * phong(lights[0], hit, vec4(camOrigin, 1),
+                                   hit.color); // Compute local illumination
+    }
+
+    // Prepare for the next reflection
+    ray.origin =
+        hit.pos + 0.001 * hit.normal; // Offset to avoid self-intersection
+    ray.direction = reflect(ray.direction, hit.normal);
+
+    attenuation *= hit.reflectivity; // Reduce intensity based on reflectivity
+    if (attenuation == vec3(0)) {
+      break; // If no light is left, break out of the loop
+    }
+     color *= traceShadow(hit, vec4(camOrigin, 1), 0);
+
+  }
+
+
+  return color;
 }
 
 void main() {
+  
 
   ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);
   ivec2 dims = imageSize(outputImage); // fetch image dimensions
 
   vec2 texCoord = vec2(float(pixelCoords.x) / float(dims.x),
                        float(pixelCoords.y) / float(dims.y));
+  
 
   //  Normalized Device Coordinates (NDC)
   vec2 ndc = (2.0 * texCoord - 1.0);
@@ -120,56 +305,33 @@ void main() {
   Ray ray;
   ray.origin = camOrigin.xyz;
   ray.direction = normalize(camRay).xyz;
+
+  vec3 color = traceRay(ray, camOrigin.xyz, vec3(0), 5);
   
-  vec3 outColor = vec3(0);
 
-  HitRecord r;
-  r.distance = 100000000.0;
+    /*  
+    float scale = 0.01;
+    float time = time * 100.0;
+    float r1 = 0.4 ; 
+    float r2 = 0.9 ; 
+    float r3 = 0.29; 
+    float x = pixelCoords.x;
+    float y = pixelCoords.y;
+    float h = dims.y;
+    float w = dims.x;
+            
+    time = time * speed;
 
-  int k = 0;
+    float col = 
+		sin(distance( vec2(x * r1 + time, y * r2), vec2(w / r3 , h) ) * scale) +
+		sin(distance( vec2(x, y * r2), vec2(1.0 / h * r3, w * r1) ) * scale) +
+		sin(distance( vec2(r3 * x + time, r1 * y + time), vec2(w * r2 + h * r1, h * r2) ) * scale) +
+		sin(distance( vec2(1.0 / x * r3 , y * r2), vec2(h, w) ) * scale);    
+            
+    color += normalize(vec3( 0.5 + 0.5 * sin(col), cos(col), cos(col) - sin(col)) + 0.1) * 0.5;
+    color += mod(float(pixelCoords.x), 2.0) < 1.0 ? 0.0 : 0.4;       
+    */
 
-  for (int i = 0; i < numSpheres; i++) {
-      
-    vec3 color = vec3(0.0, 0.0, 0.0);
-    Sphere sphere = spheres[i];
-    
-    HitRecord tr = raySphereIntersect(ray,sphere);
-
-    if (tr.hit) {
-        if (tr.distance < r.distance) {
-            r = tr;
-            k = i;
-        }
-    }
-
-  }
-    
-  float shadow = 1.0;
-
-  HitRecord str;
-  str.distance = 100000000.0;
-
-if(r.hit) {
-    for (int j = 0; j < numLights; j++) {
-        vec3 lightDir = normalize(lights[j].position - r.pos);
-        Ray shadowRay;
-        shadowRay.origin = r.pos + 0.001 * lightDir; // Slightly offset to avoid self-intersection
-        shadowRay.direction = lightDir;
-        bool inShadow = false;
-
-        for (int n = 0; n < numSpheres; n++) {
-            if (n != k) { // Avoid self-intersection
-                HitRecord temp = raySphereIntersect(shadowRay, spheres[n]);
-                if (temp.hit && temp.distance < length(lights[j].position - r.pos)) {
-                    inShadow = true;
-                    break;
-                }
-            }
-        }
-
-        float shadowFactor = inShadow ? .1 : 1.0;
-        outColor += shadowFactor * phong(lights[j], r, camOrigin, spheres[k].color);
-    }
-  }
-  imageStore(outputImage, pixelCoords, vec4(outColor, 1.0));
+  imageStore(outputImage, pixelCoords, vec4(color, 1));
 }
+

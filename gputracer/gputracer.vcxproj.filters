@@ -42,6 +42,9 @@
     <ClCompile Include="imgui_widgets.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="TextEditor.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="vertex.vert">
@@ -91,5 +94,16 @@
     <ClInclude Include="Camera.h">
       <Filter>Quelldateien</Filter>
     </ClInclude>
+    <ClInclude Include="TextEditor.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="helix.comp">
+      <Filter>Quelldateien</Filter>
+    </None>
+    <None Include="mandelbulb.comp">
+      <Filter>Quelldateien</Filter>
+    </None>
   </ItemGroup>
 </Project>

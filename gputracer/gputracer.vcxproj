@@ -139,6 +139,7 @@
     <ClCompile Include="imgui_tables.cpp" />
     <ClCompile Include="imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="TextEditor.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="compute.comp">
@@ -169,6 +170,11 @@
     <ClInclude Include="..\include\imstb_truetype.h" />
     <ClInclude Include="..\include\stb_image.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="TextEditor.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="helix.comp" />
+    <None Include="mandelbulb.comp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

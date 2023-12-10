@@ -14,12 +14,17 @@ class ComputeShader
 {
 public:
     unsigned int ID;
+
+    std::string computeCode;
+
+    ComputeShader() {}
+
     // constructor generates the shader on the fly
     // ------------------------------------------------------------------------
     ComputeShader(const char* computePath)
     {
         // 1. retrieve the vertex/fragment source code from filePath
-        std::string computeCode;
+        
         std::ifstream cShaderFile;
         // ensure ifstream objects can throw exceptions:
         cShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
@@ -40,6 +45,10 @@ public:
         {
             std::cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " << e.what() << std::endl;
         }
+        compile();
+    }
+
+    void compile() {
         const char* cShaderCode = computeCode.c_str();
         // 2. compile shaders
         unsigned int compute;
@@ -56,7 +65,9 @@ public:
         checkCompileErrors(ID, "PROGRAM");
         // delete the shaders as they're linked into our program now and no longer necessary
         glDeleteShader(compute);
+
     }
+
     // activate the shader
     // ------------------------------------------------------------------------
     void use()
@@ -148,5 +159,7 @@ private:
             }
         }
     }
+
+
 };
 #endif

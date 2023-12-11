@@ -50,7 +50,7 @@
     <Text Include="vertex.vert">
       <Filter>Quelldateien</Filter>
     </Text>
-    <Text Include="raytrace.glsl">
+    <Text Include="raytrace.comp">
       <Filter>Quelldateien</Filter>
     </Text>
     <Text Include="compute.comp">

@@ -27,6 +27,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 void myKeyCallbackFunc(GLFWwindow* window, int key, int scancode, int action, int mods);
 void character_callback(GLFWwindow* window, unsigned int codepoint);
 void recompileShader();
+glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize);
 using namespace glm;
 
 Camera camera;
@@ -77,6 +78,8 @@ struct FragUBO
 	float far;
 } ubo;
 
+
+vec3 mouse;
 const double PI = 3.14159265358979323846;
 
 ImFont* editorFont;
@@ -86,7 +89,14 @@ float specStrength = 1.0f;
 float exponent = 64.0;
 float speed = 1.0;
 
+float fps = 0;
+
 ComputeShader computeShader;
+
+uint ToUInt(int r , int g , int b , int a)
+{
+	return (uint)r << 24 | (uint)g << 16 | (uint)b << 8 | (uint)a;
+}
 
 double generateSineWave(double frequency, double amplitude, double time)
 {
@@ -149,9 +159,7 @@ int main(int argc, char* argv[])
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 130");
-
-	
+	ImGui_ImplOpenGL3_Init("#version 130");	
 
 	editor = new TextEditor();
 	// query limitations
@@ -217,6 +225,8 @@ int main(int argc, char* argv[])
 	std::mt19937 eng(rd()); // Seed the generator
 	std::uniform_real_distribution<> distr(0.1, 1.0); // Define the range
 
+	mouse = vec3();
+
 	int i = 0;
 
 	for (int y = 0; y < 10; y++)
@@ -263,6 +273,10 @@ int main(int argc, char* argv[])
 		{
 			std::cout << "FPS: " << 1 / deltaTime << "\r";
 			fCounter = 0;
+			if (fps > 0) {
+				fps = (fps + 1 / deltaTime) / 2;
+			}
+			fps = 1 / deltaTime;
 		}
 		else
 		{
@@ -305,6 +319,8 @@ int main(int argc, char* argv[])
 		computeShader.setFloat("exponent", exponent);
 		computeShader.setFloat("time", time);
 		computeShader.setFloat("speed", speed);
+		computeShader.setVec3("iMouse", mouse);
+		computeShader.setFloat("iMouse.y", mouse.y);
 
 		// Upload sphere data
 		for (int i = 0; i < 100; ++i)
@@ -345,6 +361,9 @@ int main(int argc, char* argv[])
 		ImGui::PushFont(defaultFont);
 
 		ImGui::Begin("Settings",&settings_open);
+		if (ImGui::IsMouseClicked(0)) {
+			// editor->setFocus(false);
+		}
 
 		if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
 		{
@@ -378,7 +397,26 @@ int main(int argc, char* argv[])
 		ImGui::End();
 
 		ImGui::Begin("Output",&output_open);
-		ImGui::Image((void*)(intptr_t)texture, ImVec2(SCR_WIDTH,SCR_HEIGHT));
+		if (ImGui::IsMouseClicked(0)) {
+			// editor->setFocus(false);
+		}		
+		ImVec2 windowPos = ImGui::GetItemRectMin();
+		vec2 windowSize;
+		windowSize.x  = ImGui::GetWindowContentRegionMax().x - windowPos.x;
+		windowSize.y = ImGui::GetWindowContentRegionMax().y - windowPos.y;
+
+		vec2 imageSize = calculateNewImageSize(vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT), windowSize);
+
+		ImGui::Image((void*)(intptr_t)texture, ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
+		ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+
+		windowPos.x += 20;
+		windowPos.y += 50;
+		std::stringstream ss;
+		ss << "FPS : " << fps;
+		ss.str();
+		drawList->AddText(windowPos, ToUInt(255, 255, 255, 255), ss.str().c_str());
 		ImGui::End();
 
 		ImGui::PushFont(editorFont);
@@ -481,7 +519,7 @@ void processInput(GLFWwindow* window)
 		camera.ProcessKeyboard(LEFT, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		camera.ProcessKeyboard(RIGHT, deltaTime);
-	if ((glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS))
+	if ((glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS))
 		recompileShader();
 	if ((glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS))
 	{
@@ -503,6 +541,11 @@ void processInput(GLFWwindow* window)
 		computeShader = ComputeShader("patterns.comp");
 		editor->SetText(computeShader.computeCode);
 	}
+	if ((glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS))
+	{
+		computeShader = ComputeShader("raytrace.comp");
+		editor->SetText(computeShader.computeCode);
+	}
 
 }
 
@@ -511,6 +554,9 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 
 	float xpos = static_cast<float>(xposIn);
 	float ypos = static_cast<float>(yposIn);
+
+	mouse.x = xpos;
+	mouse.y = ypos;
 
 	if (firstMouse)
 	{
@@ -549,7 +595,7 @@ void character_callback(GLFWwindow* window, unsigned int c)
 {
 	if (isprint(c) || isspace(c))
 	{
-		editor->EnterCharacter(char(c));
+		// editor->EnterCharacter(char(c));
 	}
 }
 
@@ -559,4 +605,21 @@ void myKeyCallbackFunc(GLFWwindow* window, int key, int scancode, int action, in
 void recompileShader() {
 	computeShader.computeCode = editor->GetText().c_str();
 	computeShader.compile();
+}
+
+glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize) {
+	float imageAspectRatio = imageSize.x / imageSize.y;
+
+	glm::vec2 newSize;
+	newSize.x = viewportSize.x; // Set new width to viewport width
+	newSize.y = viewportSize.x / imageAspectRatio; // Adjust height based on the image aspect ratio
+
+	// If the new height exceeds the viewport height, scale down proportionally
+	if (newSize.y > viewportSize.y) {
+		float scaleDownFactor = viewportSize.y / newSize.y;
+		newSize.x *= scaleDownFactor;
+		newSize.y = viewportSize.y;
+	}
+
+	return newSize;
 }

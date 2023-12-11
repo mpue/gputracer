@@ -18,6 +18,9 @@
 
 #include "TextEditor.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void renderQuad();
 void processInput(GLFWwindow* window);
@@ -27,7 +30,15 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 void myKeyCallbackFunc(GLFWwindow* window, int key, int scancode, int action, int mods);
 void character_callback(GLFWwindow* window, unsigned int codepoint);
 void recompileShader();
+void renderMenu();
+int quitApplication();
+
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize);
+
+Shader screenQuad;
+
+void saveImage();
+
 using namespace glm;
 
 Camera camera;
@@ -38,6 +49,8 @@ TextEditor* editor = nullptr;
 bool editor_open = true;
 bool output_open = true;
 bool settings_open = true;
+bool fullscreen = false;
+
 
 // settings
 const unsigned int SCR_WIDTH = 1920;
@@ -92,6 +105,7 @@ float speed = 1.0;
 float fps = 0;
 
 ComputeShader computeShader;
+unsigned int texture;
 
 uint ToUInt(int r , int g , int b , int a)
 {
@@ -188,7 +202,7 @@ int main(int argc, char* argv[])
 
 	// build and compile shaders
 	// -------------------------
-	Shader screenQuad("vertex.vert", "fragment.frag");
+	screenQuad = Shader("vertex.vert", "fragment.frag");
 	computeShader = ComputeShader("mandelbulb.comp");
 
 	editor->SetText(computeShader.computeCode);
@@ -198,7 +212,6 @@ int main(int argc, char* argv[])
 
 	// Create texture for opengl operation
 	// -----------------------------------
-	unsigned int texture;
 
 	glGenTextures(1, &texture);
 	glActiveTexture(GL_TEXTURE0);
@@ -257,10 +270,15 @@ int main(int argc, char* argv[])
 
 	while (!glfwWindowShouldClose(window))
 	{
-		ImGui_ImplOpenGL3_NewFrame();
-		ImGui_ImplGlfw_NewFrame();
-		ImGui::NewFrame();
-		ImGui::DockSpaceOverViewport();	
+		if (!fullscreen) {
+			ImGui_ImplOpenGL3_NewFrame();
+			ImGui_ImplGlfw_NewFrame();			
+			ImGui::NewFrame();
+			ImGui::PushFont(defaultFont);;
+			renderMenu();
+			ImGui::DockSpaceOverViewport();	
+
+		}
 	
 		// Set frame time
 		float currentFrame = glfwGetTime();
@@ -318,10 +336,10 @@ int main(int argc, char* argv[])
 		computeShader.setFloat("specStrength", specStrength);
 		computeShader.setFloat("exponent", exponent);
 		computeShader.setFloat("time", time);
+		computeShader.setFloat("iTime", time);
 		computeShader.setFloat("speed", speed);
 		computeShader.setVec3("iMouse", mouse);
-		computeShader.setFloat("iMouse.y", mouse.y);
-
+	
 		// Upload sphere data
 		for (int i = 0; i < 100; ++i)
 		{
@@ -355,79 +373,68 @@ int main(int argc, char* argv[])
 
 		// render image to quad
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		//screenQuad.use();
-		//renderQuad();
-
-		ImGui::PushFont(defaultFont);
-
-		ImGui::Begin("Settings",&settings_open);
-		if (ImGui::IsMouseClicked(0)) {
-			// editor->setFocus(false);
+		
+		if (fullscreen) {
+			screenQuad.use();
+			renderQuad();
 		}
+		else {
+			
 
-		if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
-		{
+			settings_open = ImGui::Begin("Settings", &settings_open);
+
+			if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
+			{
+			}
+			if (ImGui::DragFloat("Specular exponent", (float*)&exponent))
+			{
+			}
+			if (ImGui::DragFloat("Speed", (float*)&speed))
+			{
+			}
+			if (ImGui::DragFloat3("Light position", (float*)&lights[0].position))
+			{
+			}
+
+
+			ImGui::End();
+
+			output_open = ImGui::Begin("Output", &output_open);
+			if (ImGui::IsMouseClicked(0)) {
+				// editor->setFocus(false);
+			}
+			ImVec2 windowPos = ImGui::GetItemRectMin();
+			vec2 windowSize;
+			windowSize.x = ImGui::GetWindowContentRegionMax().x - windowPos.x;
+			windowSize.y = ImGui::GetWindowContentRegionMax().y - windowPos.y;
+
+			vec2 imageSize =vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+
+			ImGui::Image((void*)(intptr_t)texture, ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
+			ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+
+			windowPos.x += 20;
+			windowPos.y += 50;
+			std::stringstream ss;
+			ss << "FPS : " << fps;
+			ss.str();
+			drawList->AddText(windowPos, ToUInt(255, 255, 255, 255), ss.str().c_str());
+			ImGui::End();
+
+			ImGui::PushFont(editorFont);
+			editor_open = ImGui::Begin("Shader code", &editor_open);
+			editor->Render("Shader");
+			ImGui::End();
+			ImGui::PopFont();
+			ImGui::PopFont();
+
+			ImGui::Render();
+			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
 		}
-		if (ImGui::DragFloat("Specular exponent", (float*)&exponent))
-		{
-		}
-		if (ImGui::DragFloat("Speed", (float*)&speed))
-		{
-		}
+			
 
-		if (ImGui::DragFloat3("Light position", (float*)&lights[0].position))
-		{
-		}
-
-		if (ImGui::DragFloat3("Camera position", (float*)&campos))
-		{
-		}
-
-		if (ImGui::DragFloat3("Sphere position 0", (float*)&spheres[0].position))
-		{
-		}
-		if (ImGui::ColorEdit3("Sphere color 0", (float*)&spheres[0].color))
-		{
-		}
-
-		if (ImGui::DragFloat3("Sphere position 1", (float*)&spheres[1].position))
-		{
-		}
-
-		ImGui::End();
-
-		ImGui::Begin("Output",&output_open);
-		if (ImGui::IsMouseClicked(0)) {
-			// editor->setFocus(false);
-		}		
-		ImVec2 windowPos = ImGui::GetItemRectMin();
-		vec2 windowSize;
-		windowSize.x  = ImGui::GetWindowContentRegionMax().x - windowPos.x;
-		windowSize.y = ImGui::GetWindowContentRegionMax().y - windowPos.y;
-
-		vec2 imageSize = calculateNewImageSize(vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT), windowSize);
-
-		ImGui::Image((void*)(intptr_t)texture, ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
-		ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-
-		windowPos.x += 20;
-		windowPos.y += 50;
-		std::stringstream ss;
-		ss << "FPS : " << fps;
-		ss.str();
-		drawList->AddText(windowPos, ToUInt(255, 255, 255, 255), ss.str().c_str());
-		ImGui::End();
-
-		ImGui::PushFont(editorFont);
-		ImGui::Begin("Shader code",&editor_open);
-		editor->Render("Shader");
-		ImGui::End();
-		ImGui::PopFont();
-		ImGui::PopFont();
-
-		ImGui::Render();
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
 		// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
 		// -------------------------------------------------------------------------------
@@ -437,17 +444,7 @@ int main(int argc, char* argv[])
 
 	// optional: de-allocate all resources once they've outlived their purpose:
 	// ------------------------------------------------------------------------
-	glDeleteTextures(1, &texture);
-	glDeleteProgram(screenQuad.ID);
-	glDeleteProgram(computeShader.ID);
-
-	ImGui_ImplOpenGL3_Shutdown();
-	ImGui_ImplGlfw_Shutdown();
-	ImGui::DestroyContext();
-
-	glfwTerminate();
-
-	return EXIT_SUCCESS;
+	quitApplication();
 }
 
 // renderQuad() renders a 1x1 XY quad in NDC
@@ -509,8 +506,7 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 void processInput(GLFWwindow* window)
 {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
-		glfwSetWindowShouldClose(window, true);
-
+		fullscreen = false;
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		camera.ProcessKeyboard(FORWARD, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -519,8 +515,18 @@ void processInput(GLFWwindow* window)
 		camera.ProcessKeyboard(LEFT, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		camera.ProcessKeyboard(RIGHT, deltaTime);
+	if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS)
+	{
+		saveImage();
+	}
 	if ((glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS))
 		recompileShader();
+	if ((glfwGetKey(window, GLFW_KEY_F9) == GLFW_PRESS)) {
+		fullscreen = !fullscreen;
+		std::cout << "Fullscreen " << fullscreen << std::endl;
+	}
+
+
 	if ((glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS))
 	{
 		computeShader = ComputeShader("compute.comp");
@@ -544,6 +550,11 @@ void processInput(GLFWwindow* window)
 	if ((glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS))
 	{
 		computeShader = ComputeShader("raytrace.comp");
+		editor->SetText(computeShader.computeCode);
+	}
+	if ((glfwGetKey(window, GLFW_KEY_F6) == GLFW_PRESS))
+	{
+		computeShader = ComputeShader("plasma.comp");
 		editor->SetText(computeShader.computeCode);
 	}
 
@@ -622,4 +633,117 @@ glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& vie
 	}
 
 	return newSize;
+}
+
+void saveImage() {
+	GLint width, height;
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
+
+	// Allocate buffer
+	unsigned char* buffer = new unsigned char[width * height * 4]; // 4 for RGBA
+
+	// Read pixels
+	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
+
+	// Flip the image Y axis
+	for (int i = 0; i * 2 < height; ++i)
+	{
+		int index1 = i * width * 4;
+		int index2 = (height - 1 - i) * width * 4;
+		for (int j = width * 4; j > 0; --j)
+		{
+			unsigned char temp = buffer[index1];
+			buffer[index1] = buffer[index2];
+			buffer[index2] = temp;
+			++index1;
+			++index2;
+		}
+	}
+
+	// Save image
+	stbi_write_png("output.png", width, height, 4, buffer, width * 4);
+
+	// Clean up
+	delete[] buffer;
+}
+
+void renderMenu() {
+	if (ImGui::BeginMainMenuBar()) {
+		/*-File-------------------------------------------*/
+
+		if (ImGui::BeginMenu("File")) {
+			if (ImGui::MenuItem("Load shader")) {
+
+			}
+			if (ImGui::MenuItem("Save")) {
+
+			}
+			if (ImGui::MenuItem("Quit")) {				
+				exit(0);
+			}
+			ImGui::EndMenu();
+		}
+
+		/*-Edit-------------------------------------------*/
+
+		if (ImGui::BeginMenu("Edit")) {
+
+			if (ImGui::MenuItem("Save image")) {
+				saveImage();
+			}
+
+			if (ImGui::MenuItem("Recompile shader")) {
+				recompileShader();
+			}
+			ImGui::EndMenu();
+
+		}
+		/*-View-------------------------------------------*/
+
+		if (ImGui::BeginMenu("View")) {
+
+			if (ImGui::MenuItem("Shader Editor")) {
+				editor_open = true;
+			}
+			if (ImGui::MenuItem("Shader Output")) {
+				output_open = true;
+			}
+			if (ImGui::MenuItem("Shader settings")) {
+				settings_open = true;
+			}
+			if (ImGui::MenuItem("Fullscreen")) {
+				fullscreen = true;
+			}
+
+			ImGui::EndMenu();
+		}
+
+		ImGui::EndMainMenuBar();
+
+	}
+	
+
+
+}
+
+int quitApplication() {
+	glDeleteTextures(1, &texture);
+	glDeleteProgram(screenQuad.ID);
+	glDeleteProgram(computeShader.ID);
+
+	if (!fullscreen) {
+		ImGui_ImplOpenGL3_Shutdown();
+		ImGui_ImplGlfw_Shutdown();
+		ImGui::DestroyContext();
+	}
+
+	delete (editor);
+
+	glfwTerminate();
+
+	return EXIT_SUCCESS;
+
 }

@@ -62,6 +62,9 @@
     <Text Include="patterns.comp">
       <Filter>Quelldateien</Filter>
     </Text>
+    <Text Include="plasma.comp">
+      <Filter>Quelldateien</Filter>
+    </Text>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\imconfig.h">
@@ -98,6 +101,9 @@
       <Filter>Quelldateien</Filter>
     </ClInclude>
     <ClInclude Include="imgui_internal.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
+    <ClInclude Include="stb_image_write.h">
       <Filter>Quelldateien</Filter>
     </ClInclude>
   </ItemGroup>

@@ -45,6 +45,9 @@
     <ClCompile Include="TextEditor.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
+    <ClCompile Include="ImGuiFileDialog.cpp">
+      <Filter>Quelldateien</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="vertex.vert">
@@ -104,6 +107,12 @@
       <Filter>Quelldateien</Filter>
     </ClInclude>
     <ClInclude Include="stb_image_write.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGuiFileDialog.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
+    <ClInclude Include="ImGuiFileDialogConfig.h">
       <Filter>Quelldateien</Filter>
     </ClInclude>
   </ItemGroup>

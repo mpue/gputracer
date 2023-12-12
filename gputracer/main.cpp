@@ -12,11 +12,13 @@
 #include "Shader.h"
 #include "Camera.h"
 #include "ComputeShader.h"
-
+#include <sstream>
 #include <iostream>
 #include <random>
+#include <map>
 
 #include "TextEditor.h"
+#include "ImGuiFileDialog.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -32,6 +34,8 @@ void character_callback(GLFWwindow* window, unsigned int codepoint);
 void recompileShader();
 void renderMenu();
 int quitApplication();
+void renderUI();
+void addTexture(unsigned int id);
 
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize);
 
@@ -50,7 +54,7 @@ bool editor_open = true;
 bool output_open = true;
 bool settings_open = true;
 bool fullscreen = false;
-
+bool show_open_File  = false;
 
 // settings
 const unsigned int SCR_WIDTH = 1920;
@@ -104,8 +108,13 @@ float speed = 1.0;
 
 float fps = 0;
 
-ComputeShader computeShader;
-unsigned int texture;
+std::map<unsigned int, ComputeShader*> computeShaders;
+
+// ComputeShader computeShaders[8];
+unsigned int textures[16];
+
+uint numshaders = 0;
+unsigned int currentShader = 0;
 
 uint ToUInt(int r , int g , int b , int a)
 {
@@ -203,64 +212,18 @@ int main(int argc, char* argv[])
 	// build and compile shaders
 	// -------------------------
 	screenQuad = Shader("vertex.vert", "fragment.frag");
-	computeShader = ComputeShader("mandelbulb.comp");
 
-	editor->SetText(computeShader.computeCode);
+	computeShaders = std::map<unsigned int, ComputeShader*>();
+
+	// computeShaders[0] = new ComputeShader("mandelbulb.comp");
+
+	// editor->SetText(computeShaders[0]->computeCode);
 
 	screenQuad.use();
 	screenQuad.setInt("tex", 0);
 
 	// Create texture for opengl operation
 	// -----------------------------------
-
-	glGenTextures(1, &texture);
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, TEXTURE_WIDTH, TEXTURE_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
-
-	glBindImageTexture(0, texture, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texture);
-
-	Light* lights = new Light[1];
-	lights[0] = Light();
-	lights[0].color = glm::vec3(1, 1, 1);
-	lights[0].position = glm::vec3(-10, 10, -10);
-
-	Sphere* spheres = new Sphere[100];
-
-	std::random_device rd;  // Obtain a random number from hardware
-	std::mt19937 eng(rd()); // Seed the generator
-	std::uniform_real_distribution<> distr(0.1, 1.0); // Define the range
-
-	mouse = vec3();
-
-	int i = 0;
-
-	for (int y = 0; y < 10; y++)
-	{
-		for (int x = 0; x < 10; x++)
-		{
-			spheres[i] = Sphere();
-			spheres[i].color = glm::vec3(0.1 * x, 0.1 * y, 0);
-			spheres[i].radius = 1.0f;
-			spheres[i].position = glm::vec3(2 * x, 0, 2 * y);
-			spheres[i].type = 0;
-			i++;
-		}
-	}
-
-	GLuint _ubo;
-	glGenBuffers(1, &_ubo);
-
-	campos = vec3(0.0f, 0, 2);
-
-	camera = Camera(campos, vec3(0, 1, 0));
 
 	// render loop
 	// -----------
@@ -300,119 +263,45 @@ int main(int argc, char* argv[])
 		{
 			fCounter++;
 		}
-
-		computeShader.use();
-		vec3 firstPersonDirection = glm::vec3(0, 0, 1);
-
-		vec3 firstPersonUp = glm::vec3(0, 1, 0);
-		// mat4 view = lookAt(campos, campos + firstPersonDirection, firstPersonUp);
-
-		mat4 view = camera.GetViewMatrix();
-
-		// aprox. 103 degrees FoV horizontal like Overwatch
-		float fovVertical = 1.24f;
-
-		int width, height;
-		glfwGetWindowSize(window, &width, &height);
-
-		float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
-		float near = .1f, far = 300.0f;
-		mat4 projection = perspective(fovVertical, aspectRatio, near, far);
-
-		// Unproject camera for world space ray
-		mat4 inversinvProjectionView = inverse(projection * view);
-		// fill the buffer, you do this anytime any of the lights change
-
-		ubo.far = far;
-		ubo.near = near;
-		ubo.invProjectionView = inversinvProjectionView;
-
-		glBindBuffer(GL_UNIFORM_BUFFER, _ubo);
-		glBufferData(GL_UNIFORM_BUFFER, sizeof(FragUBO), (void*)&ubo, GL_DYNAMIC_DRAW);
-		glBindBufferBase(GL_UNIFORM_BUFFER, 1, _ubo);
-
-		computeShader.setInt("numLights", 1);
-		computeShader.setInt("numSpheres", 100);
-		computeShader.setFloat("specStrength", specStrength);
-		computeShader.setFloat("exponent", exponent);
-		computeShader.setFloat("time", time);
-		computeShader.setFloat("iTime", time);
-		computeShader.setFloat("speed", speed);
-		computeShader.setVec3("iMouse", mouse);
-	
-		// Upload sphere data
-		for (int i = 0; i < 100; ++i)
-		{
-			float wave = generateSineWave(i * 0.01, 1, time);
-			spheres[i].position.y = wave;
-			// Construct uniform name, e.g., "spheres[0].position"
-			std::string uniformName = "spheres[" + std::to_string(i) + "].position";
-			glUniform3fv(glGetUniformLocation(computeShader.ID, uniformName.c_str()), 1, glm::value_ptr(spheres[i].position));
-			uniformName = "spheres[" + std::to_string(i) + "].color";
-			glUniform3fv(glGetUniformLocation(computeShader.ID, uniformName.c_str()), 1, glm::value_ptr(spheres[i].color));
-			uniformName = "spheres[" + std::to_string(i) + "].radius";
-			computeShader.setFloat(uniformName.c_str(), spheres[i].radius);
-			uniformName = "spheres[" + std::to_string(i) + "].type";
-			computeShader.setInt(uniformName.c_str(), spheres[i].type);
-		}
-
-		time += deltaTime * speed;
-		// Upload light data
-		for (int i = 0; i < 1; ++i)
-		{
-			std::string uniformName = "lights[" + std::to_string(i) + "].position";
-			glUniform3fv(glGetUniformLocation(computeShader.ID, uniformName.c_str()), 1, glm::value_ptr(lights[i].position));
-			uniformName = "lights[" + std::to_string(i) + "].color";
-			glUniform3fv(glGetUniformLocation(computeShader.ID, uniformName.c_str()), 1, glm::value_ptr(lights[i].color));
-		}
-
-		glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
-
-		// make sure writing to image has finished before read
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-		// render image to quad
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		
-		if (fullscreen) {
-			screenQuad.use();
-			renderQuad();
+		time += deltaTime;
+
+		std::map<unsigned int, ComputeShader*>::iterator it;
+
+		for (it = computeShaders.begin(); it != computeShaders.end(); it++)
+		{
+			it->second->use();
+			it->second->setInt("numLights", 1);
+			it->second->setFloat("specStrength", specStrength);
+			it->second->setFloat("exponent", exponent);
+			it->second->setFloat("time", time);
+			it->second->setFloat("iTime", time);
+			it->second->setFloat("speed", speed);
+			it->second->setVec3("iMouse", mouse);
+
+			glActiveTexture(GL_TEXTURE0 + it->first);
+			glBindTexture(GL_TEXTURE_2D, textures[it->first]);
+			glBindImageTexture(GL_TEXTURE0 + it->first, it->first, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+			glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
+			// make sure writing to image has finished before read
+
 		}
-		else {
-			
-
-			settings_open = ImGui::Begin("Settings", &settings_open);
-
-			if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
-			{
-			}
-			if (ImGui::DragFloat("Specular exponent", (float*)&exponent))
-			{
-			}
-			if (ImGui::DragFloat("Speed", (float*)&speed))
-			{
-			}
-			if (ImGui::DragFloat3("Light position", (float*)&lights[0].position))
-			{
-			}
-
-
-			ImGui::End();
-
-			output_open = ImGui::Begin("Output", &output_open);
-			if (ImGui::IsMouseClicked(0)) {
-				// editor->setFocus(false);
-			}
+		for (it = computeShaders.begin(); it != computeShaders.end(); it++) 
+		{
+			std::stringstream title;
+			title << "Output " << it->first;
+			output_open = ImGui::Begin(title.str().c_str(), &output_open);
 			ImVec2 windowPos = ImGui::GetItemRectMin();
 			vec2 windowSize;
 			windowSize.x = ImGui::GetWindowContentRegionMax().x - windowPos.x;
 			windowSize.y = ImGui::GetWindowContentRegionMax().y - windowPos.y;
 
-			vec2 imageSize =vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+			vec2 imageSize = vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
 
-			ImGui::Image((void*)(intptr_t)texture, ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
+
+			ImGui::Image((void*)(intptr_t)it->first, ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
-
 
 			windowPos.x += 20;
 			windowPos.y += 50;
@@ -422,20 +311,22 @@ int main(int argc, char* argv[])
 			drawList->AddText(windowPos, ToUInt(255, 255, 255, 255), ss.str().c_str());
 			ImGui::End();
 
-			ImGui::PushFont(editorFont);
-			editor_open = ImGui::Begin("Shader code", &editor_open);
-			editor->Render("Shader");
-			ImGui::End();
-			ImGui::PopFont();
-			ImGui::PopFont();
 
-			ImGui::Render();
-			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-		}
 			
+		}
+		// render image to quad
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		
+		if (fullscreen) {
+			screenQuad.use();
+			renderQuad();
+		}
+		else {
+			renderUI();
+		}
 
 
+		
 		// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
 		// -------------------------------------------------------------------------------
 		glfwSwapBuffers(window);
@@ -526,10 +417,10 @@ void processInput(GLFWwindow* window)
 		std::cout << "Fullscreen " << fullscreen << std::endl;
 	}
 
-
+	/*
 	if ((glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS))
 	{
-		computeShader = ComputeShader("compute.comp");
+		computeShaders[0] = new ComputeShader("compute.comp");
 		editor->SetText(computeShader.computeCode);
 	}
 	if ((glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS))
@@ -557,6 +448,7 @@ void processInput(GLFWwindow* window)
 		computeShader = ComputeShader("plasma.comp");
 		editor->SetText(computeShader.computeCode);
 	}
+	*/
 
 }
 
@@ -614,8 +506,8 @@ void myKeyCallbackFunc(GLFWwindow* window, int key, int scancode, int action, in
 }
 
 void recompileShader() {
-	computeShader.computeCode = editor->GetText().c_str();
-	computeShader.compile();
+	//computeShader.computeCode = editor->GetText().c_str();
+	//computeShader.compile();
 }
 
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize) {
@@ -638,7 +530,7 @@ glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& vie
 void saveImage() {
 	GLint width, height;
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texture);
+	glBindTexture(GL_TEXTURE_2D, textures[0]);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
 
@@ -676,7 +568,7 @@ void renderMenu() {
 
 		if (ImGui::BeginMenu("File")) {
 			if (ImGui::MenuItem("Load shader")) {
-
+				show_open_File = true;
 			}
 			if (ImGui::MenuItem("Save")) {
 
@@ -729,10 +621,83 @@ void renderMenu() {
 
 }
 
+void renderUI() {
+	settings_open = ImGui::Begin("Settings", &settings_open);
+
+	if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
+	{
+	}
+	if (ImGui::DragFloat("Specular exponent", (float*)&exponent))
+	{
+	}
+	if (ImGui::DragFloat("Speed", (float*)&speed))
+	{
+	}
+
+	ImGui::End();
+
+	std::map<unsigned int, ComputeShader*>::iterator it;
+	for (it = computeShaders.begin(); it != computeShaders.end(); it++)
+	{		}
+
+	ImGui::PushFont(editorFont);
+	editor_open = ImGui::Begin("Shader code", &editor_open);
+	editor->Render("Shader");
+	ImGui::End();
+	ImGui::PopFont();
+	ImGui::PopFont();
+
+
+	if (show_open_File) {
+		ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", ".comp",
+			".", 1, nullptr, ImGuiFileDialogFlags_Modal);
+
+		// display
+		if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
+		{
+			// action if OK
+			if (ImGuiFileDialog::Instance()->IsOk())
+			{
+				std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+				std::string filePath = ImGuiFileDialog::Instance()->GetCurrentPath();
+				// action
+				unsigned int id;
+				glGenTextures(1, &id);
+				glActiveTexture(GL_TEXTURE0);
+				glBindTexture(GL_TEXTURE_2D, id);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, TEXTURE_WIDTH, TEXTURE_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+				glBindImageTexture(0, id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+
+				ComputeShader* shader = new ComputeShader(filePathName.c_str());
+				computeShaders.insert({ id,shader });
+				editor->SetText(computeShaders[id]->computeCode);
+			}
+
+			// close
+			ImGuiFileDialog::Instance()->Close();
+			show_open_File = false;
+		}
+
+	}
+
+
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+}
+
+void addTexture(unsigned int id) {
+
+}
+
 int quitApplication() {
-	glDeleteTextures(1, &texture);
+	glDeleteTextures(1, &textures[0]);
 	glDeleteProgram(screenQuad.ID);
-	glDeleteProgram(computeShader.ID);
+	// glDeleteProgram(computeShader.ID);
 
 	if (!fullscreen) {
 		ImGui_ImplOpenGL3_Shutdown();

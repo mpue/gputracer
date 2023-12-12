@@ -132,6 +132,7 @@
   <ItemGroup>
     <ClCompile Include="glad.c" />
     <ClCompile Include="imgui.cpp" />
+    <ClCompile Include="ImGuiFileDialog.cpp" />
     <ClCompile Include="imgui_demo.cpp" />
     <ClCompile Include="imgui_draw.cpp" />
     <ClCompile Include="imgui_impl_glfw.cpp" />
@@ -173,6 +174,8 @@
     <ClInclude Include="..\include\imstb_truetype.h" />
     <ClInclude Include="..\include\stb_image.h" />
     <ClInclude Include="Camera.h" />
+    <ClInclude Include="ImGuiFileDialog.h" />
+    <ClInclude Include="ImGuiFileDialogConfig.h" />
     <ClInclude Include="imgui_internal.h" />
     <ClInclude Include="stb_image_write.h" />
     <ClInclude Include="TextEditor.h" />

@@ -183,6 +183,7 @@
   <ItemGroup>
     <None Include="helix.comp" />
     <None Include="mandelbulb.comp" />
+    <None Include="ornaments.comp" />
     <None Include="template.comp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

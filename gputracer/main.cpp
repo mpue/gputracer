@@ -24,6 +24,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+using namespace glm;
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void renderQuad();
 void processInput(GLFWwindow* window);
@@ -38,15 +40,10 @@ int quitApplication();
 void renderUI();
 void addTexture(unsigned int* id);
 void createErrorMarkers(std::vector<std::string> errors);
-
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize);
-
-Shader screenQuad;
-
 void saveImage();
 
-using namespace glm;
-
+Shader screenQuad;
 Camera camera;
 vec3 campos;
 
@@ -176,8 +173,8 @@ int main(int argc, char* argv[])
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-	editorFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 14.0f);
-	defaultFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\arial.ttf", 14.0f);
+	editorFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 18.0f);
+	defaultFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\arial.ttf", 18.0f);
 
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
@@ -277,7 +274,9 @@ int main(int argc, char* argv[])
 			it->second->setInt("numLights", 1);
 			it->second->setFloat("specStrength", specStrength);
 			it->second->setFloat("exponent", exponent);
+			
 			it->second->setFloat("time", time*speed);
+		    // meet shadertoy compat
 			it->second->setFloat("iTime", time*speed);
 			it->second->setFloat("speed", speed);
 			it->second->setVec3("iMouse", mouse);
@@ -286,12 +285,10 @@ int main(int argc, char* argv[])
 			glBindTexture(GL_TEXTURE_2D, textures[it->first]);
 			glBindImageTexture(GL_TEXTURE0 + it->first, it->first, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-			glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
-			// make sure writing to image has finished before read
 
-		}
-		for (it = computeShaders.begin(); it != computeShaders.end(); it++) 
-		{
+			// make sure writing to image has finished before read
+			glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
+
 			std::stringstream title;
 			title << "Output " << it->first;
 			output_open = ImGui::Begin(title.str().c_str(), &output_open);
@@ -354,26 +351,10 @@ void renderQuad()
 	{
 		float quadVertices[] = {
 			// positions        // texture Coords
-			-1.0f,
-			1.0f,
-			0.0f,
-			0.0f,
-			1.0f,
-			-1.0f,
-			-1.0f,
-			0.0f,
-			0.0f,
-			0.0f,
-			1.0f,
-			1.0f,
-			0.0f,
-			1.0f,
-			1.0f,
-			1.0f,
-			-1.0f,
-			0.0f,
-			1.0f,
-			0.0f,
+			-1.0f, 1.0f, 0.0f,		0.0f,1.0f,
+			-1.0f,-1.0f, 0.0f,		0.0f,0.0f,
+			 1.0f, 1.0f, 0.0f,  	1.0f,1.0f,
+			1.0f, -1.0f, 0.0f,		1.0f,0.0f,
 		};
 		// setup plane VAO
 		glGenVertexArrays(1, &quadVAO);

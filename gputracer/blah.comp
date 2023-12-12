@@ -4,7 +4,7 @@ uniform float iTime;
 uniform vec3 iMouse;
 
 layout(local_size_x = 16, local_size_y = 16) in;
-layout(rgba8, binding = %BINDING_UNIT%) uniform image2D outputImage;
+layout(rgba8, binding = 2) uniform image2D outputImage;
 
 layout(binding = 1) uniform FragUBO {
   mat4 invProjectionView;
@@ -13,9 +13,44 @@ layout(binding = 1) uniform FragUBO {
 }
 camera;
 
-void mainImage( out vec4 C, in vec2 U)
+
+vec3 palette( float t ) {
+    vec3 a = vec3(0.5, 0.5, 0.5);
+    vec3 b = vec3(0.5, 0.5, 0.5);
+    vec3 c = vec3(1.0, 1.0, 1.0);
+    vec3 d = vec3(0.263,0.416,0.557);
+
+    return a + b*cos( 6.28318*(c*t+d) );
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord)
 {
-    // your code here
+	vec2 iResolution = imageSize(outputImage);
+	vec2 uv = fragCoord / iResolution.xy * 2.0 - 1.0;
+	vec2 uv0 = uv;
+	
+	vec3 finalColor = vec3(0.0);
+	
+    uv.x *= iResolution.x / iResolution.y;    
+    
+    for (float i = 0.0; i < 4.0; i++) {
+          
+    	uv = fract(1.1415926  * uv) - 0.5;
+              
+       
+	    float d = length(uv);
+    
+    	vec3 col = palette(length(uv0) + iTime * 0.4)  *0.5;
+        
+	    d = sin(d * 8. +iTime) / 8.;
+    	d = abs(d);
+	    d = 0.03 /d;
+    
+    	finalColor += col * d;
+    }
+    
+    fragColor = vec4(finalColor, 1.0);
+    
 }
 
 void main() {
@@ -30,5 +65,7 @@ void main() {
   mainImage(outColor,gl_GlobalInvocationID.xy);
   imageStore(outputImage, pixelCoords, outColor);
 }
+
+
 
 

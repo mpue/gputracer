@@ -9,6 +9,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <regex>
 
 class ComputeShader
 {
@@ -21,7 +22,7 @@ public:
 
     // constructor generates the shader on the fly
     // ------------------------------------------------------------------------
-    ComputeShader(const char* computePath)
+    ComputeShader(const char* computePath, unsigned int unit)
     {
         // 1. retrieve the vertex/fragment source code from filePath
         
@@ -40,6 +41,12 @@ public:
             cShaderFile.close();
             // convert stream into string
             computeCode = cShaderStream.str();
+
+            std::stringstream ss;
+
+            ss << unit;
+
+            computeCode = std::regex_replace(computeCode, std::regex("\\%BINDING_UNIT%"),ss.str());
         }
         catch (std::ifstream::failure& e)
         {

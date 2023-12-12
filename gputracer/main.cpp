@@ -173,8 +173,8 @@ int main(int argc, char* argv[])
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-	editorFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 18.0f);
-	defaultFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\arial.ttf", 20.0f);
+	editorFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 16.0f);
+	defaultFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\arial.ttf", 16.0f);
 
 	// Setup Dear ImGui style
 	ImGui::StyleColorsDark();
@@ -274,8 +274,8 @@ int main(int argc, char* argv[])
 			it->second->setInt("numLights", 1);
 			it->second->setFloat("specStrength", specStrength);
 			it->second->setFloat("exponent", exponent);
-			it->second->setFloat("time", time);
-			it->second->setFloat("iTime", time);
+			it->second->setFloat("time", time*speed);
+			it->second->setFloat("iTime", time*speed);
 			it->second->setFloat("speed", speed);
 			it->second->setVec3("iMouse", mouse);
 
@@ -292,13 +292,14 @@ int main(int argc, char* argv[])
 			std::stringstream title;
 			title << "Output " << it->first;
 			output_open = ImGui::Begin(title.str().c_str(), &output_open);
+
 			ImVec2 windowPos = ImGui::GetItemRectMin();
+
 			vec2 windowSize;
 			windowSize.x = ImGui::GetWindowContentRegionMax().x - windowPos.x;
 			windowSize.y = ImGui::GetWindowContentRegionMax().y - windowPos.y;
 
 			vec2 imageSize = vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
-
 
 			ImGui::Image((void*)(intptr_t)it->first, ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
 			ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -310,8 +311,6 @@ int main(int argc, char* argv[])
 			ss.str();
 			drawList->AddText(windowPos, ToUInt(255, 255, 255, 255), ss.str().c_str());
 			ImGui::End();
-
-
 			
 		}
 		// render image to quad
@@ -324,9 +323,7 @@ int main(int argc, char* argv[])
 		else {
 			renderUI();
 		}
-
-
-		
+	
 		// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
 		// -------------------------------------------------------------------------------
 		glfwSwapBuffers(window);
@@ -416,39 +413,6 @@ void processInput(GLFWwindow* window)
 		fullscreen = !fullscreen;
 		std::cout << "Fullscreen " << fullscreen << std::endl;
 	}
-
-	/*
-	if ((glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS))
-	{
-		computeShaders[0] = new ComputeShader("compute.comp");
-		editor->SetText(computeShader.computeCode);
-	}
-	if ((glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS))
-	{
-		computeShader = ComputeShader("mandelbulb.comp");
-		editor->SetText(computeShader.computeCode);
-	}
-	if ((glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS))
-	{
-		computeShader = ComputeShader("helix.comp");
-		editor->SetText(computeShader.computeCode);
-	}
-	if ((glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS))
-	{
-		computeShader = ComputeShader("patterns.comp");
-		editor->SetText(computeShader.computeCode);
-	}
-	if ((glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS))
-	{
-		computeShader = ComputeShader("raytrace.comp");
-		editor->SetText(computeShader.computeCode);
-	}
-	if ((glfwGetKey(window, GLFW_KEY_F6) == GLFW_PRESS))
-	{
-		computeShader = ComputeShader("plasma.comp");
-		editor->SetText(computeShader.computeCode);
-	}
-	*/
 
 }
 
@@ -670,9 +634,9 @@ void renderUI() {
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, TEXTURE_WIDTH, TEXTURE_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
-				glBindImageTexture(0, id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+				glBindImageTexture(id, id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 
-				ComputeShader* shader = new ComputeShader(filePathName.c_str());
+				ComputeShader* shader = new ComputeShader(filePathName.c_str(),id);
 				computeShaders.insert({ id,shader });
 				editor->SetText(computeShaders[id]->computeCode);
 			}
@@ -683,7 +647,6 @@ void renderUI() {
 		}
 
 	}
-
 
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

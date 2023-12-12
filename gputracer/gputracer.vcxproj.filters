@@ -123,5 +123,8 @@
     <None Include="mandelbulb.comp">
       <Filter>Quelldateien</Filter>
     </None>
+    <None Include="template.comp">
+      <Filter>Quelldateien</Filter>
+    </None>
   </ItemGroup>
 </Project>

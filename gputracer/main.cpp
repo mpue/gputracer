@@ -16,6 +16,7 @@
 #include <iostream>
 #include <random>
 #include <map>
+#include <regex>
 
 #include "TextEditor.h"
 #include "ImGuiFileDialog.h"
@@ -35,7 +36,8 @@ void recompileShader();
 void renderMenu();
 int quitApplication();
 void renderUI();
-void addTexture(unsigned int id);
+void addTexture(unsigned int* id);
+void createErrorMarkers(std::vector<std::string> errors);
 
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize);
 
@@ -54,7 +56,8 @@ bool editor_open = true;
 bool output_open = true;
 bool settings_open = true;
 bool fullscreen = false;
-bool show_open_File  = false;
+bool show_open_file  = false;
+bool show_Save_new_file = false;
 
 // settings
 const unsigned int SCR_WIDTH = 1920;
@@ -114,7 +117,7 @@ std::map<unsigned int, ComputeShader*> computeShaders;
 unsigned int textures[16];
 
 uint numshaders = 0;
-unsigned int currentShader = 0;
+ComputeShader* currentShader = nullptr;
 
 uint ToUInt(int r , int g , int b , int a)
 {
@@ -293,6 +296,12 @@ int main(int argc, char* argv[])
 			title << "Output " << it->first;
 			output_open = ImGui::Begin(title.str().c_str(), &output_open);
 
+			// Check if the window is focused and if the left mouse button was clicked
+			if (ImGui::IsWindowFocused() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+				editor->SetText(it->second->computeCode);
+				currentShader = it->second;
+			}
+
 			ImVec2 windowPos = ImGui::GetItemRectMin();
 
 			vec2 windowSize;
@@ -444,8 +453,6 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 	}
 }
 
-// glfw: whenever the mouse scroll wheel scrolls, this callback is called
-// ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
 	camera.ProcessMouseScroll(static_cast<float>(yoffset));
@@ -470,8 +477,10 @@ void myKeyCallbackFunc(GLFWwindow* window, int key, int scancode, int action, in
 }
 
 void recompileShader() {
-	//computeShader.computeCode = editor->GetText().c_str();
-	//computeShader.compile();
+	if (currentShader != nullptr) {
+		currentShader->computeCode = editor->GetText().c_str();		
+		createErrorMarkers(currentShader->compile());
+	}		
 }
 
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize) {
@@ -531,11 +540,37 @@ void renderMenu() {
 		/*-File-------------------------------------------*/
 
 		if (ImGui::BeginMenu("File")) {
+			if (ImGui::MenuItem("New shader")) {
+				std::ifstream cShaderFile;
+				// ensure ifstream objects can throw exceptions:
+				cShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+				try
+				{
+					// open files
+					cShaderFile.open("template.comp");
+					std::stringstream cShaderStream;
+					cShaderStream << cShaderFile.rdbuf();
+					cShaderFile.close();
+					std::string templateShader = cShaderStream.str();
+					editor->SetText(templateShader);
+					show_Save_new_file = true;
+
+						
+				}
+				catch (std::ifstream::failure& e)
+				{
+					std::cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " << e.what() << std::endl;
+					return;
+				}
+			}
 			if (ImGui::MenuItem("Load shader")) {
-				show_open_File = true;
+				show_open_file = true;
 			}
 			if (ImGui::MenuItem("Save")) {
-
+				if(currentShader != nullptr) {
+					currentShader->save();
+					createErrorMarkers(currentShader->compile());
+				}
 			}
 			if (ImGui::MenuItem("Quit")) {				
 				exit(0);
@@ -586,33 +621,38 @@ void renderMenu() {
 }
 
 void renderUI() {
-	settings_open = ImGui::Begin("Settings", &settings_open);
 
-	if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
-	{
-	}
-	if (ImGui::DragFloat("Specular exponent", (float*)&exponent))
-	{
-	}
-	if (ImGui::DragFloat("Speed", (float*)&speed))
-	{
-	}
+	if (settings_open) {
+		settings_open = ImGui::Begin("Settings", &settings_open);
 
-	ImGui::End();
+		if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
+		{
+		}
+		if (ImGui::DragFloat("Specular exponent", (float*)&exponent))
+		{
+		}
+		if (ImGui::DragFloat("Speed", (float*)&speed))
+		{
+		}
+
+		ImGui::End();
+	}
 
 	std::map<unsigned int, ComputeShader*>::iterator it;
 	for (it = computeShaders.begin(); it != computeShaders.end(); it++)
 	{		}
 
-	ImGui::PushFont(editorFont);
-	editor_open = ImGui::Begin("Shader code", &editor_open);
-	editor->Render("Shader");
-	ImGui::End();
-	ImGui::PopFont();
+	if (editor_open) {
+		ImGui::PushFont(editorFont);
+		editor_open = ImGui::Begin("Shader code", &editor_open);
+		editor->Render("Shader");
+		ImGui::End();
+		ImGui::PopFont();
+	}
+
 	ImGui::PopFont();
 
-
-	if (show_open_File) {
+	if (show_open_file) {
 		ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", ".comp",
 			".", 1, nullptr, ImGuiFileDialogFlags_Modal);
 
@@ -625,42 +665,115 @@ void renderUI() {
 				std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
 				std::string filePath = ImGuiFileDialog::Instance()->GetCurrentPath();
 				// action
-				unsigned int id;
-				glGenTextures(1, &id);
-				glActiveTexture(GL_TEXTURE0);
-				glBindTexture(GL_TEXTURE_2D, id);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-				glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, TEXTURE_WIDTH, TEXTURE_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
-				glBindImageTexture(id, id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+				unsigned int id = 0;
+
+				addTexture(&id);
 
 				ComputeShader* shader = new ComputeShader(filePathName.c_str(),id);
+				shader->compile();
+
 				computeShaders.insert({ id,shader });
 				editor->SetText(computeShaders[id]->computeCode);
 			}
 
 			// close
 			ImGuiFileDialog::Instance()->Close();
-			show_open_File = false;
+			show_open_file = false;
 		}
 
 	}
 
+	if (show_Save_new_file) {
+		ImGuiFileDialog::Instance()->OpenDialog("ChooseFileDlgKey", "Choose File", ".comp",
+			".", 1, nullptr, ImGuiFileDialogFlags_Modal);
+
+		// display
+		if (ImGuiFileDialog::Instance()->Display("ChooseFileDlgKey"))
+		{
+			// action if OK
+			if (ImGuiFileDialog::Instance()->IsOk())
+			{
+				std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
+				std::string filePath = ImGuiFileDialog::Instance()->GetCurrentPath();
+
+				std::ofstream outputFile(filePathName);
+
+				if (outputFile.is_open()) {
+
+					outputFile << editor->GetText();
+					outputFile.close();
+
+					std::cout << "String written to file successfully." << std::endl;
+				}
+				else {
+					std::cerr << "Unable to open file for writing." << std::endl;
+				}
+
+				unsigned int id;
+
+				addTexture(&id);
+
+				ComputeShader* shader = new ComputeShader(filePathName.c_str(), id);
+				computeShaders.insert({ id,shader });
+				editor->SetText(computeShaders[id]->computeCode);
+
+
+			}
+
+			// close
+			ImGuiFileDialog::Instance()->Close();
+			show_Save_new_file = false;
+		}
+
+	}
+
+
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
 }
 
-void addTexture(unsigned int id) {
+void addTexture(unsigned int* id) {
+	glGenTextures(1, id);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, *id);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, TEXTURE_WIDTH, TEXTURE_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
+	glBindImageTexture(*id, *id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+}
 
+void createErrorMarkers(std::vector<std::string> errors) {
+	TextEditor::ErrorMarkers markers;
+
+	editor->SetErrorMarkers(markers);
+
+	for (unsigned int i = 0; i < errors.size(); i++) {
+		std::string error = errors.at(i);
+
+		// parse message and line number
+		std::regex re("\\((\\d+)\\).*: (.*)$");
+		std::smatch match;
+
+		if (std::regex_search(error, match, re) && match.size() > 2) {
+			std::string lineNumber = match[1].str();
+			std::string errorMessage = match[2].str();
+
+			markers.insert(std::make_pair<int, std::string>(std::stoi(lineNumber), errorMessage.c_str()));
+			
+		}
+
+	}
+
+	editor->SetErrorMarkers(markers);
 }
 
 int quitApplication() {
 	glDeleteTextures(1, &textures[0]);
 	glDeleteProgram(screenQuad.ID);
-	// glDeleteProgram(computeShader.ID);
+	
+
 
 	if (!fullscreen) {
 		ImGui_ImplOpenGL3_Shutdown();

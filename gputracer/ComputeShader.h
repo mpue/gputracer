@@ -17,6 +17,7 @@ public:
     unsigned int ID;
 
     std::string computeCode;
+    std::string computePath;
 
     ComputeShader() {}
 
@@ -26,6 +27,8 @@ public:
     {
         // 1. retrieve the vertex/fragment source code from filePath
         
+        this->computePath = computePath;
+
         std::ifstream cShaderFile;
         // ensure ifstream objects can throw exceptions:
         cShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);
@@ -52,10 +55,10 @@ public:
         {
             std::cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " << e.what() << std::endl;
         }
-        compile();
+        
     }
 
-    void compile() {
+    std::vector<std::string> compile() {
         const char* cShaderCode = computeCode.c_str();
         // 2. compile shaders
         unsigned int compute;
@@ -63,15 +66,38 @@ public:
         compute = glCreateShader(GL_COMPUTE_SHADER);
         glShaderSource(compute, 1, &cShaderCode, NULL);
         glCompileShader(compute);
-        checkCompileErrors(compute, "COMPUTE");
+        std::vector<std::string> errors = checkCompileErrors(compute, "COMPUTE");
 
         // shader Program
         ID = glCreateProgram();
         glAttachShader(ID, compute);
         glLinkProgram(ID);
-        checkCompileErrors(ID, "PROGRAM");
+
+
+        std::vector<std::string> progErrors =  checkCompileErrors(ID, "PROGRAM");
         // delete the shaders as they're linked into our program now and no longer necessary
         glDeleteShader(compute);
+
+        if (progErrors.size() > 0)
+            errors.insert(errors.end(), progErrors.begin(), progErrors.end());
+
+        return errors;
+    }
+
+    void save() {
+
+        std::ofstream outputFile(computePath);
+
+        if (outputFile.is_open()) {
+
+            outputFile << computeCode;
+            outputFile.close();
+
+            std::cout << "String written to file successfully." << std::endl;
+        }
+        else {
+            std::cerr << "Unable to open file for writing." << std::endl;
+        }
 
     }
 
@@ -141,9 +167,24 @@ public:
     }
 
 private:
+
+    std::vector<std::string> split(const std::string& str, char delim) {
+        std::vector<std::string> tokens;
+        std::stringstream ss(str);
+        std::string token;
+
+        while (std::getline(ss, token, delim)) {
+            if (!token.empty()) {
+                tokens.push_back(token);
+            }
+        }
+
+        return tokens;
+    }
+
     // utility function for checking shader compilation/linking errors.
     // ------------------------------------------------------------------------
-    void checkCompileErrors(GLuint shader, std::string type)
+    std::vector<std::string> checkCompileErrors(GLuint shader, std::string type)
     {
         GLint success;
         GLchar infoLog[1024];
@@ -154,6 +195,9 @@ private:
             {
                 glGetShaderInfoLog(shader, 1024, NULL, infoLog);
                 std::cout << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+
+                return split(infoLog, '\n');
+
             }
         }
         else
@@ -163,6 +207,7 @@ private:
             {
                 glGetProgramInfoLog(shader, 1024, NULL, infoLog);
                 std::cout << "ERROR::PROGRAM_LINKING_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
+                return split(infoLog, '\n');
             }
         }
     }

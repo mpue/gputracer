@@ -18,6 +18,8 @@ public:
 
     std::string computeCode;
     std::string computePath;
+    unsigned int textureUnit;
+    bool visible = true;
 
     ComputeShader() {}
 
@@ -28,6 +30,8 @@ public:
         // 1. retrieve the vertex/fragment source code from filePath
         
         this->computePath = computePath;
+        this->textureUnit = unit;
+        
 
         std::ifstream cShaderFile;
         // ensure ifstream objects can throw exceptions:

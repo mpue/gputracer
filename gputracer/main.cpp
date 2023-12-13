@@ -24,6 +24,8 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+bool visibles[64] = { true };
+
 using namespace glm;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -128,6 +130,9 @@ double generateSineWave(double frequency, double amplitude, double time)
 
 int main(int argc, char* argv[])
 {
+	for (int i = 0; i < 64; i++) {
+		visibles[i] = true;
+	}
 
 	// glfw: initialize and configure
 	// ------------------------------
@@ -268,18 +273,21 @@ int main(int argc, char* argv[])
 
 		std::map<unsigned int, ComputeShader*>::iterator it;
 
+		int v_idx = 0;
+
 		for (it = computeShaders.begin(); it != computeShaders.end(); it++)
 		{
 			it->second->use();
 			it->second->setInt("numLights", 1);
 			it->second->setFloat("specStrength", specStrength);
 			it->second->setFloat("exponent", exponent);
-			
-			it->second->setFloat("time", time*speed);
-		    // meet shadertoy compat
-			it->second->setFloat("iTime", time*speed);
+
+			it->second->setFloat("time", time * speed);
+			// meet shadertoy compat
+			it->second->setFloat("iTime", time * speed);
 			it->second->setFloat("speed", speed);
 			it->second->setVec3("iMouse", mouse);
+			it->second->setInt("iFrame", fCounter );
 
 			glActiveTexture(GL_TEXTURE0 + it->first);
 			glBindTexture(GL_TEXTURE_2D, textures[it->first]);
@@ -290,33 +298,40 @@ int main(int argc, char* argv[])
 			glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
 
 			std::stringstream title;
-			title << "Output " << it->first;
-			output_open = ImGui::Begin(title.str().c_str(), &output_open);
+			title << it->second->computePath;
 
-			// Check if the window is focused and if the left mouse button was clicked
-			if (ImGui::IsWindowFocused() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-				editor->SetText(it->second->computeCode);
-				currentShader = it->second;
+			if (visibles[v_idx]) {
+				if (ImGui::Begin(title.str().c_str(), &visibles[v_idx])) {
+
+					// Check if the window is focused and if the left mouse button was clicked
+					if (ImGui::IsWindowFocused() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+						editor->SetText(it->second->computeCode);
+						currentShader = it->second;
+					}
+
+					ImVec2 windowPos = ImGui::GetItemRectMin();
+
+					vec2 windowSize;
+					windowSize.x = ImGui::GetWindowContentRegionMax().x - windowPos.x;
+					windowSize.y = ImGui::GetWindowContentRegionMax().y - windowPos.y;
+
+					vec2 imageSize = vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
+
+					ImGui::Image((void*)(intptr_t)it->first, ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
+					ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+					windowPos.x += 20;
+					windowPos.y += 50;
+					std::stringstream ss;
+					ss << "FPS : " << fps;
+					ss.str();
+					drawList->AddText(windowPos, ToUInt(255, 255, 255, 255), ss.str().c_str());
+				}
+				ImGui::End();
+				
 			}
+			v_idx++;
 
-			ImVec2 windowPos = ImGui::GetItemRectMin();
-
-			vec2 windowSize;
-			windowSize.x = ImGui::GetWindowContentRegionMax().x - windowPos.x;
-			windowSize.y = ImGui::GetWindowContentRegionMax().y - windowPos.y;
-
-			vec2 imageSize = vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
-
-			ImGui::Image((void*)(intptr_t)it->first, ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
-			ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-			windowPos.x += 20;
-			windowPos.y += 50;
-			std::stringstream ss;
-			ss << "FPS : " << fps;
-			ss.str();
-			drawList->AddText(windowPos, ToUInt(255, 255, 255, 255), ss.str().c_str());
-			ImGui::End();
 			
 		}
 		// render image to quad
@@ -482,9 +497,14 @@ glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& vie
 }
 
 void saveImage() {
+
+	if (currentShader == nullptr) {
+		return;
+	}
+
 	GLint width, height;
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, textures[0]);
+	glActiveTexture(GL_TEXTURE0 + currentShader->textureUnit);
+	glBindTexture(GL_TEXTURE_2D, currentShader->textureUnit);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
 
@@ -618,11 +638,6 @@ void renderUI() {
 
 		ImGui::End();
 	}
-
-	std::map<unsigned int, ComputeShader*>::iterator it;
-	for (it = computeShaders.begin(); it != computeShaders.end(); it++)
-	{		}
-
 	if (editor_open) {
 		ImGui::PushFont(editorFont);
 		editor_open = ImGui::Begin("Shader code", &editor_open);
@@ -652,9 +667,9 @@ void renderUI() {
 
 				ComputeShader* shader = new ComputeShader(filePathName.c_str(),id);
 				shader->compile();
-
 				computeShaders.insert({ id,shader });
 				editor->SetText(computeShaders[id]->computeCode);
+				currentShader = shader;
 			}
 
 			// close

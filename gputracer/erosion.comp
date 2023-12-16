@@ -7,7 +7,7 @@ uniform sampler2D iChannel1;
 
 
 layout(local_size_x = 16, local_size_y = 16) in;
-layout(rgba8, binding = 4) uniform image2D outputImage;
+layout(rgba8, binding = %BINDING_UNIT%) uniform image2D outputImage;
 
 layout(binding = 1) uniform FragUBO {
   mat4 invProjectionView;
@@ -675,6 +675,8 @@ void main() {
                        float(pixelCoords.y) / float(dims.y));
   
   vec4 outColor;
+
+  // outColor = GetChannel1(texCoord);
 
   mainImage(outColor,gl_GlobalInvocationID.xy);
 

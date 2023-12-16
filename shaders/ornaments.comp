@@ -1,0 +1,554 @@
+﻿/*
+
+	Poincare Disc Animation
+	-----------------------
+    
+    A CSG polygon driven Poincare tiling with an animated pattern overlay.
+    
+	This simple animation has been sitting around in my account for way too
+    long. I made it at the same time as one of my other hyperbolic related 
+    postings. There are not a great deal of animated Poincare disc examples
+    around, so I wanted to make one. Like so many things I put together, it 
+    was coded up without putting a great deal of thought into it. On a 
+    personal level, I don't like producing code that involves "magic" numbers 
+    and guesswork. However, there's a little bit of that in here. I'd imagine 
+    experts in this area will probably roll their eyes at the sheer hackory 
+    involved. :)
+    
+    In fact, I'm secretly hoping someone will see this and post an example 
+    that shows me a better way to do it... Whilst I'm putting in requests, 
+    one of those colored interwoven ribbon demonstrations on a Poincare disc
+    would be nice. :) 
+    
+    In regard to the pattern itself, that was fairly easy. Rendering lines,
+    points, etc., on a hyperbolic plane is similar to that on a Euclidean
+    plane. However, you're using a coordinate system akin to polar coordinates,
+    which is fine, unless it's been a while and you try to position things
+    with Euclidean coordinates. In fact, the code up to that point is pretty 
+    reliable. However, I really hacked around to render the arcs between side
+    midpoints, and to render the repeat animation objects, so I was left 
+    thinking that there'd have to be a more elegant way to do this.
+    
+    Anyway, the purpose of this was to post something artistic rather than a 
+    treatise on hyperbolic geometry, for which there are already plenty of 
+    interesting examples on here. The next step would be to post some cool 
+    looking hyperbolic patterns using more realiable code. :)
+    
+
+
+
+    Poincare disc examples:
+
+    // The hyperbolic transformation itself is based on STB's example here,
+    // which I'm assuming was in turn based on a slide presentation by
+    // Vladimir Bulatov: http://www.bulatov.org/math/1001/index.html
+	//
+    Hyperbolic Poincaré transformed - stb
+	https://www.shadertoy.com/view/3lscDf
+
+
+    // Another hyperbolic pattern example.
+    Hyperbolic Poincare Weave - Shane
+    https://www.shadertoy.com/view/tljyRR
+    
+
+*/
+#version 450
+
+uniform float iTime;
+uniform vec3 iMouse;
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba8, binding = %BINDING_UNIT%) uniform image2D outputImage;
+
+layout(binding = 1) uniform FragUBO {
+  mat4 invProjectionView;
+  float near;
+  float far;
+}
+ubo;
+
+
+// Because I was rushed, this particular pattern only works with two 
+// arrangements, namely the "3-8" triangle setup and the "4-6" quad. 
+// Next times, I'll try to get more to work.
+//
+// Polygon shape - 0: Triangle, 1: Quad.
+#define POLY 0
+
+
+// Standard 2D rotation formula.
+mat2 rot2(in float a){ float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
+
+
+// IQ's unsigned line distance formula.
+float distLine(vec2 p, vec2 a, vec2 b){
+
+    p -= a; b -= a;
+    float h = clamp(dot(p, b)/dot(b, b), 0., 1.);
+    return length(p - b*h);
+}
+
+
+// P represents the number of polygon vertices, and Q is the number of 
+// adjacent polygons to each vertex within the Poincare disc.
+//
+// For tilings to work, the following must be true: (P − 2)*(Q − 2)>4.
+//
+// For instance, 3 and 7 will work, but 4 and 4 will not.
+//
+// 3-7, 3-8, 4-5, 5-4, 5-6, 6-4, 7-3, 8-3, 8-4, etc..
+//
+
+// Because I was rushed, this particular pattern only works with two 
+// arrangements. Next time, I'll try to get more to work.
+#if POLY == 0
+const int N = 3;	// Polygon vertices.
+const int Q = 8;	// Polygons meeting at a vertex.
+#else
+const int N = 4;	// Polygon vertices.
+const int Q = 6;	// Polygons meeting at a vertex.
+#endif
+
+#define PI		3.14159265
+#define TAU	    6.28318531
+
+
+// Calculating the initial circular domain according to number of polygon
+// sides (N) and the number of adjacent polygons (Q): STB was clever enough to  
+// use repeat polar space to position the rest. Anyway, the idea is to use the
+// polygon geometry to set up the required geometrical diagram (see the line 
+// below), then use a mixture of standard Euclidean and hyperbolic geometry (if
+// needed) to calculate the required values, which are described below.
+// 
+vec3 initDomain(){
+    
+	// There are quite a few ways to calculate the initial circular domain 
+    // values, simply because there are several solutions to the same geometric 
+    // problems, which is all this is. In fact, as geometric situations go,
+    // this is not a particularly difficult one to solve.
+
+    // The following is some highschool level circle and triangle geometry to 
+    // get the values we're after.
+    //
+    // The Hyperbolic Chamber - Jos Leys
+    // http://www.josleys.com/article_show.php?id=83
+    //
+    // I also find the imagery on the following page helpful as well:
+    // http://www.malinc.se/noneuclidean/en/poincaretiling.php
+   
+    // I can't for the life of me remember how I calculated these, but they're
+    // based on the diagrams you'll find in the links above. At the time, I was
+    // looking for the most concise solution I could, and forgot to write down what
+    // "d2" and "r2" represented on the diagrams... Either way, it was something 
+    // simple. I'll locate the original code at some stage and expand on it.
+    //
+    float a = sin(PI/float(N)), b = cos(PI/float(Q)); // Polygon angle lengths.
+	float d2 = cos(PI/float(N) + PI/float(Q))/a;
+	float r2 = 1./(b*b/a/a - 1.); // Adjacent polygon radius (squared).
+	
+    // Distance between adjacent polygon centers, the adjacent polygon radius,
+    // and the current polygon radius. We're assuming no negatives, but I'm 
+    // capping things above zero, just in case.
+	return sqrt(max(vec3(1. + r2, r2, d2*d2*r2), 0.));  
+
+}
+
+
+
+// Count variable, which is seful for all kinds of things. It's a measure
+// of how many iterations were required to get to the current polygon.
+// The center polygon would have a count of one, and should increase as we 
+// radiate outwards.
+float count;
+// Relates to the side number.
+float gIA; 
+
+
+ 
+
+// Hyperbolically reflecting the polygon across each of it's edges
+// via an inverse Mobius transform.
+vec3 transform(vec2 p, vec3 domInfo){
+    
+    // Side number.
+    gIA = 0.;
+ 
+    
+    
+    
+    // Polygon value, set to the maximum. The surrounding circcles will
+    // be used to carve out the final value.
+    float gPoly = 1e5;
+   
+    
+    // Performing multiple reflective inversions to fill out the disk. Due 
+    // to the nature of the hyperbolic transform, the polygon tiles get 
+    // smaller as you approach the outer disk, and never reach the edge. 
+    // There are a bunch of proofs in complex analysis that illustrate
+    // this, but nothing shows it as well as a computer program. :)
+    // Drop the number of iterations and you'll see the process unfold.
+    for(int i=0; i<24; i++){
+       
+        
+        // The following is a standard polar repeat operation. It works
+        // the same in hyperbolic space as it does in Euclidian space.
+        // If you didn't do this, you'd reflect across just the one
+        // edge. Set "ia" to ".5/float(N)" to see what I mean.
+        float na = floor(mod(atan(p.x, p.y), 6.2831589)/TAU*float(N));
+        float ia = (na + .5)/float(N);
+        vec2 vert = rot2(ia*TAU)*vec2(0, domInfo.x);
+
+        float rSq = domInfo.y*domInfo.y;
+
+       
+        // Circle inversion, which relates back to an inverse Mobius
+        // transformation. There are a lot of topics on just this alone, but 
+        // the bottom line is, if you perform this operation on a point within
+        // the Poincare disk, it will be reflected. It's similar to the
+        // "p /= dot(p, p)" move that some may have used before.
+        vec2 pc = p - vert;
+        float lSq = dot(pc, pc);
+        
+        
+     
+
+        // If the distance (we're squaring for speed) from the current point to
+        // any vertex point is within the circle limits, hyperbolically reflect it.
+        if(lSq<rSq){
+
+            p = pc*rSq/lSq + vert;
+    
+            // Maintaining chirality. There are times when you need this.
+            p.x = -p.x;
+            
+            // If we have a hit, increase the counter. This value can be useful
+            // for coloring, and other things.
+            count++; 
+
+        }
+        else {
+
+            // We're not inside, so render the last CSG polygon we have on record.
+            //
+            // I've lazily set it to a global, but there'd be cleaner ways to work 
+            // the calculations in. Technically, you could wrap this in an else
+            // statement, but I think it's cleaner out here.
+            float poly = (length(p) - domInfo.z);
+            poly = max(poly, -(length(pc) - domInfo.y));
+            gPoly = min(gPoly, poly);
+            
+            // Side number.
+            gIA = na; 
+            
+     
+            // We're outside of the domain, so break from the loop.
+            break;
+        }
+
+        
+    }
+    
+    // Local coordinates and polygon distance.
+    return vec3(p, gPoly);
+}
+
+
+// Mouse pointer inversion.
+vec2 mouseInversion(vec2 p){
+    
+    vec2 iResolution = imageSize(outputImage);
+
+    // Mouse coordinates.
+    vec2 m = vec2((2.*iMouse.xy - iResolution.xy)/iResolution.y);
+    // Hack for the zero case instance. If someone has a better way,
+    // feel free to let me know.
+    if(length(m) < 1e-3) m += 1e-3; 
+    // A hack to stop some craziness occurring on the border.
+    //if(abs(m.x)>.98*.7071 || abs(m.y)>.98*.7071) m *= .98;
+    
+    // Taking the mouse point and inverting it into the circle domain.
+    // Feel free to check some figures, but all will get mapped to 
+    // values that lie within circle radius.
+    float k = 1./dot(m, m);
+    vec2 invCtr = k*m; 
+    float t = (k - 1.)/dot(p - invCtr, p - invCtr);
+    p = t*p + (1. - t)*invCtr;
+    p.x = -p.x; // Keep chirality. MLA does this. 
+    
+    return p;
+    
+}
+
+
+
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    
+    vec2 iResolution = imageSize(outputImage);
+
+    // Aspect correct coordinates: Actually, fragCoord is already in 
+    // aspect correct form, so shifting and scaling is all that is
+    // required in this particular pixel shader environment.
+    vec2 uv = (2.*fragCoord - iResolution.xy)/iResolution.y;
+  
+    
+    /*
+    // Moving to the half plane model.
+    const float sc = 2.;
+    uv.y += sc/2. + 1.;
+    uv /= dot(uv, uv)/sc;
+    uv.y -= 1.; 
+    */
+    
+    // Contracting things just a touch to fit the Poincare domain on 
+    // the canvas.
+    uv *= 1.1;
+     
+     
+    // Hyperbolic the hyperbolic... I made that up, but it spherizes things 
+    // a bit, which looks interesting.
+    //uv *= (.65 + dot(uv, uv)*.35);
+     
+    
+    // Poincare coordinates.
+    vec2 p = uv;
+    
+    
+    // Canvas rotation for a bit of variance.
+    p *= rot2(-iTime/8.);
+  
+
+
+    // A bit of mouse inversion and rotation to begin with. You'll
+    // see this a lot in various hyperbolic examples, and others.
+    p = mouseInversion(p);
+    
+    
+    vec2 oP = p;
+    
+    // Inversion count. It's used for all kinds of things, like 
+    // random number production, etc.
+    count = 0.;
+  
+    
+    // Filling in the domain origin information: From left to right, it 
+    // returns the distance between adjacent polygon centers, the adjacent 
+    // polygon radius, and the current polygon radius. These values remain
+    // the same for all polygons throughout the hyperbolic plane, so this 
+    // is all that's required to tile the disc.
+    //
+    // domInfo.x: Distance between adjacent polygon centers.
+    // domInfo.y: The adjacent polygon radius.
+    // domInfo.z: The current polygon radius.
+    vec3 domInfo = initDomain(); 
+    
+    
+   
+    
+    // Handling the imagery outside the Poincare circle domain by inverting or
+    // mirroring it back into the circle so that it shows up.
+    //
+    // By the way, if you want to get more of an intuitive feel for circle 
+    // inversion, I recommend Numberphile's "Epic Circles" video, here:
+    // https://www.youtube.com/watch?v=sG_6nlMZ8f4
+    if(length(p)> 1.) p /= dot(p, p); 
+  
+
+    
+        
+
+    // Get local transformed polygon coordinates (p3.xy) and the polygonal 
+    // distance field itself (p3.z).
+    vec3 pp3 = transform(p, domInfo);
+    
+    // Local coordinates and polygon distance field value.
+    p = pp3.xy;
+    float gPoly = pp3.z;
+    
+    // Flipping from reflection to reflection. Just as in Euclidean geometry,
+    // animated objects sometimes need their directions flipped from 
+    // polygon to polygon.
+    float flip = mod(count, 2.)*2. - 1.; // Values: -1 and 1.
+    
+ 
+    // Setting a ring distance field, then using that to add more to the 
+    // smoothing factor to alleviate aliasing around the borders. It's 
+    // hacky, and no substitute for super sampling, but it works well 
+    // enough here.
+    float ssf = (2. - smoothstep(0., .25, abs(length(uv) - 1.) - .25));
+    float sf = 2./iResolution.y*ssf*ssf;//(count*count + 1.);//fwidth(shape);// 
+
+ 
+    
+    // Setting the color, according to the hyperbolic reflection count.
+    // IQ's versatile palette routine. It's one of my favorites.
+    vec3 oCol = .5 + .45*cos(TAU*count/12. + vec3(1, 0, 2));
+ 
+ 
+    
+    // The background color. It looks interesting enough like this, but the lines
+    // give it additional depth.
+    vec3 col = vec3(0.);
+    
+     
+    // For some reason, this setup gives nicer width edging, whereas the
+    // normal way I go about it does not... I'll look into it later. :)
+    col = mix(col, oCol, 1. - smoothstep(0., sf, gPoly + .01));
+    col = mix(col, vec3(0), 1. - smoothstep(0., sf, abs(gPoly) - .005));
+
+    
+    
+    // Polygon side debug.
+    //if(gIA==0.) col *= vec3(8, 2, 1);
+    //if(gIA==1.) col *= vec3(4, 1, 12);
+   
+    // Vertices and edges.
+    vec2[N] v, e;
+    
+    // The first vextex position.
+    vec2 r = vec2(0, domInfo.x - domInfo.y);
+    
+    // Vertices and edges.
+    float vert = 1e5, mid = 1e5;
+     
+    for(int i = 0; i<N; i++){
+       // Mulitples of v0.
+       v[i] = rot2(TAU/float(N)*float(i))*vec2(0, domInfo.z);
+       // Midpoint edges are rotated between successive vertices. 
+       e[i] = rot2(TAU/float(N)*(float(i) + .5))*r;
+       
+       // Vertex and midpoint distances.
+       vert = min(vert, length(p - v[i]));
+       mid = min(mid, length(p - e[i])); // Not used, but they're here anyway.
+    }
+    
+     
+ 
+    // Saving the background color. 
+    vec3 svOCol = oCol;
+    
+    
+    // Rendering the polygon vertex points.
+    col = mix(col, vec3(0), 1. - smoothstep(0., sf, vert - .04));
+    
+    
+    float lw = .06; // Line width.
+    float cw = .07*3./float(N); // Moving rectangle width.
+     
+    // Going one extra to render the half of the first strip again.
+    for(int i = 0; i<=N; i++){
+    
+       
+        // On the last iteration we want to render half the 
+        // first strip over the top to make the overlapping pattern.
+        if(i==N && (p.y + lw/2.*0.<0.)) break;
+
+    
+        // domInfo.x: Distance between adjacent polygon centers.
+        // domInfo.y: The adjacent polygon radius.
+        // domInfo.z: The current polygon radius.
+        // A magic radius related number for the "3-8" and "4-6" combinations.
+        // 3-8: .212 // 4-6: .405
+        float magic = N == 3? .212 : .405;
+        // Vertex center of the adjoining circle that creates the arc for this
+        // particular polygon side -- It's at an angle midway between the vertex
+        // points flanking the side and at a constant distance that was hacked in
+        // by trial and error. Obviously, it'd be better to calculate it properly.
+        vec2 vv = rot2(fract((float(i + 1))/float(N))*TAU)*vec2(0, domInfo.x + domInfo.z*magic);
+        
+        // The arc line itself.
+        float df = length(p - vv) - (domInfo.x);
+        df = abs(df) - lw;
+
+
+
+        col = mix(col, vec3(0), (1. - smoothstep(0., sf*10., df))*.5);
+        col = mix(col, vec3(0), 1. - smoothstep(0., sf, df));
+        col = mix(col, vec3(.07), 1. - smoothstep(0., sf, df + .015));
+  
+ 
+        // Controls the number of animated squares.
+        // 3 and up will work, but the width "cw", will need adjusting.
+        float m = 3.; 
+       
+        // Animated objects: More magic numbers. I'm not even sure what
+        // I was thinking to arrive at this... Sigh! :)
+        float aNum = (float(N) - .5)*float(Q)*m  + float(Q*2) + 1.;  
+        if(N == 4) aNum = float(N*Q)*m;
+        // Animation: Reversing each time a polygon is hyperbolically
+        // reflected across the side boundary. On a Euclidean plane, you'll
+        // do something similar.
+        float t2 = iTime;
+        if(flip<0.){ t2 = -t2; }
+     
+        // The center of the neighboring circle contributing to this 
+        // polygon side arc.
+        vec2 cntr = p - vv;
+
+        // Reverse the direction on the outside of the disc.
+        float dir = (length(uv) > 1.)? -1. : 1.;
+        cntr *= rot2((fract(dir*t2/aNum))*TAU);
+
+        // Animated polar object stuff: Rotate the angle, then move
+        // along the radius to the appropriate distance.
+        float na = floor(atan(cntr.x, cntr.y)/6.2831*aNum);
+        float ia = (na + .5)/aNum;
+        cntr *= rot2(ia*6.2831);
+        cntr.y -= domInfo.x;
+
+        // The animated object (just a rectangle) and rendering.
+        float df3 = max(abs(cntr.x), abs(cntr.y)) - cw;
+        df3 = max(df3, df + .03);
+        col = mix(col, vec3(0), 1. - smoothstep(0., sf, df3));
+        col = mix(col, svOCol*1.3 + .1, 1. - smoothstep(0., sf, df3 + .015)); 
+      
+   
+    }
+    
+    
+    // Polygon edge debug.
+    //if(p.y + lw/2.*0.>0.) col *= .5;
+    
+    // Flipped polygon debug.
+    //if(flip<0.) col *= .5; // Area affected.
+    
+    
+    // At the last minute, I decided to render different colors on the
+    // outside of disc... I'm still not sure whether it worked or not. :D
+    col = mix(col, col.yxz, smoothstep(0., sf, length(uv) - 1.));
+    
+    // Outer ring.
+    //col = mix(col, vec3(0), 1. - smoothstep(0., sf*4., abs(length(uv) - 1.)));
+    float ring = abs(length(uv) - 1.) - .01;
+    col = mix(col, vec3(0), 1. - smoothstep(0., sf*4., ring));
+    col = mix(col, vec3(0), 1. - smoothstep(0., sf, ring));
+    col = mix(col, vec3(.07), 1. - smoothstep(0., sf, ring + .01));
+
+ 
+    //vec3 gr = vec3(1)*dot(col, vec3(.299, .587, .114));
+    //col = mix(col, gr, smoothstep(0., sf, length(uv) - 1.));
+    
+    // Vignette.
+    uv = fragCoord/iResolution.xy;
+    col *= pow(16.*uv.x*uv.y*(1. - uv.x)*(1. - uv.y) , 1./16.);
+
+    
+    // Rough gamma correction, then present to the screen.
+    fragColor = vec4(sqrt(max(col, 0.)), 1.);
+}
+
+void main() {
+  
+
+  ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 dims = imageSize(outputImage); // fetch image dimensions
+
+  vec2 texCoord = vec2(float(pixelCoords.x) / float(dims.x),
+                       float(pixelCoords.y) / float(dims.y));
+  
+  vec4 outColor;
+
+  mainImage(outColor,gl_GlobalInvocationID.xy);
+  imageStore(outputImage, pixelCoords, outColor);
+}

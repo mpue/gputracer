@@ -231,6 +231,8 @@ int main(int argc, char* argv[])
 	Channel1 = new ComputeShader("channel1.comp", channel1Tex);
 	Channel1->compile();
 
+	computeShaders.insert({ channel0Tex,Channel0 });
+	computeShaders.insert({ channel1Tex,Channel1 });
 	// editor->SetText(computeShaders[0]->computeCode);
 
 	screenQuad.use();
@@ -281,25 +283,25 @@ int main(int argc, char* argv[])
 		time += deltaTime;
 
 
-		Channel0->use();
-		// meet shadertoy compat
-		Channel0->setFloat("iTime", time * speed);
-		Channel0->setFloat("speed", speed);
-		Channel0->setVec3("iMouse", mouse);
-		Channel0->setInt("iFrame", fCounter);
+		////Channel0->use();
+		////// meet shadertoy compat
+		////Channel0->setFloat("iTime", time * speed);
+		////Channel0->setFloat("speed", speed);
+		////Channel0->setVec3("iMouse", mouse);
+		////Channel0->setInt("iFrame", fCounter);
 
-		glBindImageTexture(GL_TEXTURE0 + 6, Channel0->ID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-		glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
+		////glBindImageTexture(GL_TEXTURE0 + 6, Channel0->ID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+		////glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		////glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
 
-		Channel1->use();
-		Channel1->setFloat("iTime", time * speed);
-		Channel1->setFloat("speed", speed);
-		Channel1->setVec3("iMouse", mouse);
-		Channel1->setInt("iFrame", fCounter);
+		////Channel1->use();
+		////Channel1->setFloat("iTime", time * speed);
+		////Channel1->setFloat("speed", speed);
+		////Channel1->setVec3("iMouse", mouse);
+		////Channel1->setInt("iFrame", fCounter);
 
-		glBindImageTexture(GL_TEXTURE0 + 7, Channel1->ID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		//glBindImageTexture(GL_TEXTURE0 + 7, Channel1->ID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+		//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 		// make sure writing to image has finished before read
 		glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
@@ -311,18 +313,24 @@ int main(int argc, char* argv[])
 		for (it = computeShaders.begin(); it != computeShaders.end(); it++)
 		{
 			it->second->use();
+			if (it->second->computePath.find("channel") == std::string::npos) {
+				glActiveTexture(GL_TEXTURE0 + channel0Tex);
+				glBindTexture(GL_TEXTURE_2D, channel0Tex);
+				it->second->setInt("iChannel0", channel0Tex);
+				glActiveTexture(GL_TEXTURE0 + channel1Tex);
+				glBindTexture(GL_TEXTURE_2D, channel1Tex);
+				it->second->setInt("iChannel1", channel1Tex);
+			}
 			it->second->setInt("numLights", 1);
 			it->second->setFloat("specStrength", specStrength);
 			it->second->setFloat("exponent", exponent);
 
 			it->second->setFloat("time", time * speed);
-			// meet shadertoy compat
+			// meet shadertoy compat 
 			it->second->setFloat("iTime", time * speed);
 			it->second->setFloat("speed", speed);
 			it->second->setVec3("iMouse", mouse);
 			it->second->setInt("iFrame", fCounter );
-			it->second->setInt("iChannel0", Channel0->ID);
-			it->second->setInt("iChannel1", Channel1->ID);
 
 			glBindImageTexture(GL_TEXTURE0 + it->first, it->first, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);

@@ -1,0 +1,44 @@
+
+#version 450
+uniform float iTime;
+uniform vec3 iMouse;
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba8, binding = 2) uniform image2D outputImage;
+
+layout(binding = 1) uniform FragUBO {
+  mat4 invProjectionView;
+  float near;
+  float far;
+}
+camera;
+
+float checkerboard(vec2 coord, float size){
+    vec2 pos = floor(coord/size); 
+    return mod(pos.x+pos.y,2.0);
+}
+
+void mainImage( out vec4 fragColor, in vec2 fragCoord)
+{
+    fragCoord += iTime*50.0;
+    float size = 200.;
+    float c = checkerboard(fragCoord,size);
+    fragColor = vec4(c,c,c,1.0);
+    
+}
+
+void main() {
+  ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);
+  ivec2 dims = imageSize(outputImage); // fetch image dimensions
+
+  vec2 texCoord = vec2(float(pixelCoords.x) / float(dims.x),
+                       float(pixelCoords.y) / float(dims.y));
+  
+  vec4 outColor;
+
+  mainImage(outColor,gl_GlobalInvocationID.xy);
+  imageStore(outputImage, pixelCoords, outColor);
+}
+
+
+

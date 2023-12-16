@@ -32,7 +32,6 @@ public:
         this->computePath = computePath;
         this->textureUnit = unit;
         
-
         std::ifstream cShaderFile;
         // ensure ifstream objects can throw exceptions:
         cShaderFile.exceptions(std::ifstream::failbit | std::ifstream::badbit);

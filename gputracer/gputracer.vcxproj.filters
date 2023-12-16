@@ -115,6 +115,12 @@
     <ClInclude Include="ImGuiFileDialogConfig.h">
       <Filter>Quelldateien</Filter>
     </ClInclude>
+    <ClInclude Include="Shader.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
+    <ClInclude Include="ComputeShader.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="helix.comp">
@@ -127,6 +133,15 @@
       <Filter>Quelldateien</Filter>
     </None>
     <None Include="ornaments.comp">
+      <Filter>Quelldateien</Filter>
+    </None>
+    <None Include="channel0.comp">
+      <Filter>Quelldateien</Filter>
+    </None>
+    <None Include="channel1.comp">
+      <Filter>Quelldateien</Filter>
+    </None>
+    <None Include="erosion.comp">
       <Filter>Quelldateien</Filter>
     </None>
   </ItemGroup>

@@ -46,6 +46,10 @@ glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& vie
 void saveImage();
 
 Shader screenQuad;
+ComputeShader* Channel0;
+ComputeShader* Channel1;
+unsigned int channel0Tex;
+unsigned int channel1Tex;
 Camera camera;
 vec3 campos;
 
@@ -220,7 +224,12 @@ int main(int argc, char* argv[])
 
 	computeShaders = std::map<unsigned int, ComputeShader*>();
 
-	// computeShaders[0] = new ComputeShader("mandelbulb.comp");
+	addTexture(&channel0Tex);
+	Channel0 = new ComputeShader("channel0.comp", channel0Tex);
+	Channel0->compile();
+	addTexture(&channel1Tex);
+	Channel1 = new ComputeShader("channel1.comp", channel1Tex);
+	Channel1->compile();
 
 	// editor->SetText(computeShaders[0]->computeCode);
 
@@ -271,6 +280,30 @@ int main(int argc, char* argv[])
 		
 		time += deltaTime;
 
+
+		Channel0->use();
+		// meet shadertoy compat
+		Channel0->setFloat("iTime", time * speed);
+		Channel0->setFloat("speed", speed);
+		Channel0->setVec3("iMouse", mouse);
+		Channel0->setInt("iFrame", fCounter);
+
+		glBindImageTexture(GL_TEXTURE0 + 6, Channel0->ID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
+
+		Channel1->use();
+		Channel1->setFloat("iTime", time * speed);
+		Channel1->setFloat("speed", speed);
+		Channel1->setVec3("iMouse", mouse);
+		Channel1->setInt("iFrame", fCounter);
+
+		glBindImageTexture(GL_TEXTURE0 + 7, Channel1->ID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+		// make sure writing to image has finished before read
+		glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
+
 		std::map<unsigned int, ComputeShader*>::iterator it;
 
 		int v_idx = 0;
@@ -288,9 +321,9 @@ int main(int argc, char* argv[])
 			it->second->setFloat("speed", speed);
 			it->second->setVec3("iMouse", mouse);
 			it->second->setInt("iFrame", fCounter );
+			it->second->setInt("iChannel0", Channel0->ID);
+			it->second->setInt("iChannel1", Channel1->ID);
 
-			glActiveTexture(GL_TEXTURE0 + it->first);
-			glBindTexture(GL_TEXTURE_2D, textures[it->first]);
 			glBindImageTexture(GL_TEXTURE0 + it->first, it->first, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
@@ -616,9 +649,6 @@ void renderMenu() {
 		ImGui::EndMainMenuBar();
 
 	}
-	
-
-
 }
 
 void renderUI() {
@@ -713,7 +743,6 @@ void renderUI() {
 				computeShaders.insert({ id,shader });
 				editor->SetText(computeShaders[id]->computeCode);
 
-
 			}
 
 			// close
@@ -723,10 +752,10 @@ void renderUI() {
 
 	}
 
-
 	ImGui::Render();
 	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
+
 
 void addTexture(unsigned int* id) {
 	glGenTextures(1, id);
@@ -756,8 +785,7 @@ void createErrorMarkers(std::vector<std::string> errors) {
 			std::string lineNumber = match[1].str();
 			std::string errorMessage = match[2].str();
 
-			markers.insert(std::make_pair<int, std::string>(std::stoi(lineNumber), errorMessage.c_str()));
-			
+			markers.insert(std::make_pair<int, std::string>(std::stoi(lineNumber), errorMessage.c_str()));			
 		}
 
 	}
@@ -769,8 +797,6 @@ int quitApplication() {
 	glDeleteTextures(1, &textures[0]);
 	glDeleteProgram(screenQuad.ID);
 	
-
-
 	if (!fullscreen) {
 		ImGui_ImplOpenGL3_Shutdown();
 		ImGui_ImplGlfw_Shutdown();

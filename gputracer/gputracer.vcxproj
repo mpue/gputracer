@@ -105,6 +105,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;_CRT_SECURE_NO_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>$(ProjectDir)\..\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>stdcpp17</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -131,14 +132,14 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="glad.c" />
-    <ClCompile Include="imgui.cpp" />
-    <ClCompile Include="ImGuiFileDialog.cpp" />
-    <ClCompile Include="imgui_demo.cpp" />
-    <ClCompile Include="imgui_draw.cpp" />
-    <ClCompile Include="imgui_impl_glfw.cpp" />
-    <ClCompile Include="imgui_impl_opengl3.cpp" />
-    <ClCompile Include="imgui_tables.cpp" />
-    <ClCompile Include="imgui_widgets.cpp" />
+    <ClCompile Include="imgui\imgui.cpp" />
+    <ClCompile Include="imgui\ImGuiFileDialog.cpp" />
+    <ClCompile Include="imgui\imgui_demo.cpp" />
+    <ClCompile Include="imgui\imgui_draw.cpp" />
+    <ClCompile Include="imgui\imgui_impl_glfw.cpp" />
+    <ClCompile Include="imgui\imgui_impl_opengl3.cpp" />
+    <ClCompile Include="imgui\imgui_tables.cpp" />
+    <ClCompile Include="imgui\imgui_widgets.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="TextEditor.cpp" />
   </ItemGroup>
@@ -165,31 +166,63 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\include\imconfig.h" />
-    <ClInclude Include="..\include\imgui.h" />
-    <ClInclude Include="..\include\imgui_impl_glfw.h" />
-    <ClInclude Include="..\include\imgui_impl_opengl3.h" />
-    <ClInclude Include="..\include\imgui_impl_opengl3_loader.h" />
-    <ClInclude Include="..\include\imstb_rectpack.h" />
-    <ClInclude Include="..\include\imstb_textedit.h" />
-    <ClInclude Include="..\include\imstb_truetype.h" />
     <ClInclude Include="..\include\stb_image.h" />
     <ClInclude Include="Camera.h" />
     <ClInclude Include="ComputeShader.h" />
-    <ClInclude Include="ImGuiFileDialog.h" />
-    <ClInclude Include="ImGuiFileDialogConfig.h" />
-    <ClInclude Include="imgui_internal.h" />
+    <ClInclude Include="imgui\imconfig.h" />
+    <ClInclude Include="imgui\imgui.h" />
+    <ClInclude Include="imgui\ImGuiFileDialog.h" />
+    <ClInclude Include="imgui\ImGuiFileDialogConfig.h" />
+    <ClInclude Include="imgui\imgui_impl_glfw.h" />
+    <ClInclude Include="imgui\imgui_impl_opengl3.h" />
+    <ClInclude Include="imgui\imgui_impl_opengl3_loader.h" />
+    <ClInclude Include="imgui\imgui_internal.h" />
+    <ClInclude Include="imgui\imstb_rectpack.h" />
+    <ClInclude Include="imgui\imstb_textedit.h" />
+    <ClInclude Include="imgui\imstb_truetype.h" />
     <ClInclude Include="Shader.h" />
     <ClInclude Include="stb_image_write.h" />
     <ClInclude Include="TextEditor.h" />
+    <ClInclude Include="UI\AWindow.h" />
+    <ClInclude Include="UI\Dialog.h" />
+    <ClInclude Include="UI\IView.h" />
+    <ClInclude Include="UI\SettingsWindow.h" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="channel0.comp" />
-    <None Include="channel1.comp" />
+    <None Include="erosion_channel0.comp" />
+    <None Include="erosion_channel1.comp" />
     <None Include="erosion.comp" />
     <None Include="helix.comp" />
+    <None Include="imgui\imgui.ini" />
     <None Include="mandelbulb.comp" />
     <None Include="ornaments.comp" />
-    <None Include="template.comp" />
+    <None Include="rainforest.comp" />
+    <None Include="rainforest_channel0.comp" />
+    <None Include="shaders\anotherTest.comp" />
+    <None Include="shaders\blah.comp" />
+    <None Include="shaders\blah2.comp" />
+    <None Include="shaders\blahblah.comp" />
+    <None Include="shaders\checkers.comp" />
+    <None Include="shaders\compute.comp" />
+    <None Include="shaders\erosion.comp" />
+    <None Include="shaders\erosion_channel0.comp" />
+    <None Include="shaders\erosion_channel1.comp" />
+    <None Include="shaders\fragment.frag" />
+    <None Include="shaders\helix.comp" />
+    <None Include="shaders\landscape.comp" />
+    <None Include="shaders\mandelbulb.comp" />
+    <None Include="shaders\ornaments.comp" />
+    <None Include="shaders\patterns.comp" />
+    <None Include="shaders\pipi.comp" />
+    <None Include="shaders\plasma.comp" />
+    <None Include="shaders\rainforest.comp" />
+    <None Include="shaders\rainforest_channel0.comp" />
+    <None Include="shaders\raymarch.comp" />
+    <None Include="shaders\raytrace.comp" />
+    <None Include="shaders\template.comp" />
+    <None Include="shaders\test.comp" />
+    <None Include="shaders\test245.comp" />
+    <None Include="shaders\vertex.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

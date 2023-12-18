@@ -13,6 +13,15 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Headerdateien\UI">
+      <UniqueIdentifier>{aa3c24c8-61ae-4984-85c8-b09e38ce2de3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Quelldateien\imgui">
+      <UniqueIdentifier>{dcff76d2-20c1-453a-b520-2a23fb22f688}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="shaders">
+      <UniqueIdentifier>{32a83f3c-0cc9-41df-8773-ac070f6b2857}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -21,32 +30,32 @@
     <ClCompile Include="glad.c">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="imgui.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
-    <ClCompile Include="imgui_demo.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
-    <ClCompile Include="imgui_draw.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
-    <ClCompile Include="imgui_impl_glfw.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
-    <ClCompile Include="imgui_impl_opengl3.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
-    <ClCompile Include="imgui_tables.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
-    <ClCompile Include="imgui_widgets.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
     <ClCompile Include="TextEditor.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="ImGuiFileDialog.cpp">
-      <Filter>Quelldateien</Filter>
+    <ClCompile Include="imgui\imgui.cpp">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_demo.cpp">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_draw.cpp">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_impl_glfw.cpp">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_impl_opengl3.cpp">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_tables.cpp">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\imgui_widgets.cpp">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClCompile>
+    <ClCompile Include="imgui\ImGuiFileDialog.cpp">
+      <Filter>Quelldateien\imgui</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -70,30 +79,6 @@
     </Text>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\include\imconfig.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\imgui.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\imgui_impl_glfw.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\imgui_impl_opengl3.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\imgui_impl_opengl3_loader.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\imstb_rectpack.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\imstb_textedit.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="..\include\imstb_truetype.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
     <ClInclude Include="..\include\stb_image.h">
       <Filter>Quelldateien</Filter>
     </ClInclude>
@@ -103,16 +88,7 @@
     <ClInclude Include="TextEditor.h">
       <Filter>Quelldateien</Filter>
     </ClInclude>
-    <ClInclude Include="imgui_internal.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
     <ClInclude Include="stb_image_write.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="ImGuiFileDialog.h">
-      <Filter>Quelldateien</Filter>
-    </ClInclude>
-    <ClInclude Include="ImGuiFileDialogConfig.h">
       <Filter>Quelldateien</Filter>
     </ClInclude>
     <ClInclude Include="Shader.h">
@@ -120,6 +96,54 @@
     </ClInclude>
     <ClInclude Include="ComputeShader.h">
       <Filter>Quelldateien</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\Dialog.h">
+      <Filter>Headerdateien\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\IView.h">
+      <Filter>Headerdateien\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\imconfig.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imconfig.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imgui.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imgui_impl_glfw.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imgui_impl_opengl3.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imgui_impl_opengl3_loader.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imgui_internal.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\ImGuiFileDialog.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\ImGuiFileDialogConfig.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imstb_rectpack.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imstb_textedit.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="imgui\imstb_truetype.h">
+      <Filter>Quelldateien\imgui</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\AWindow.h">
+      <Filter>Headerdateien\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="UI\SettingsWindow.h">
+      <Filter>Headerdateien\UI</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -129,20 +153,101 @@
     <None Include="mandelbulb.comp">
       <Filter>Quelldateien</Filter>
     </None>
-    <None Include="template.comp">
-      <Filter>Quelldateien</Filter>
-    </None>
     <None Include="ornaments.comp">
       <Filter>Quelldateien</Filter>
     </None>
-    <None Include="channel0.comp">
+    <None Include="erosion_channel0.comp">
       <Filter>Quelldateien</Filter>
     </None>
-    <None Include="channel1.comp">
+    <None Include="erosion_channel1.comp">
       <Filter>Quelldateien</Filter>
     </None>
     <None Include="erosion.comp">
       <Filter>Quelldateien</Filter>
+    </None>
+    <None Include="rainforest_channel0.comp">
+      <Filter>Quelldateien</Filter>
+    </None>
+    <None Include="rainforest.comp">
+      <Filter>Quelldateien</Filter>
+    </None>
+    <None Include="imgui\imgui.ini">
+      <Filter>Quelldateien\imgui</Filter>
+    </None>
+    <None Include="shaders\anotherTest.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\blah.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\blah2.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\blahblah.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\checkers.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\compute.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\erosion.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\erosion_channel0.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\erosion_channel1.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\fragment.frag">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\helix.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\landscape.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\mandelbulb.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\ornaments.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\patterns.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\pipi.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\plasma.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\rainforest.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\rainforest_channel0.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\raymarch.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\raytrace.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\template.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\test.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\test245.comp">
+      <Filter>shaders</Filter>
+    </None>
+    <None Include="shaders\vertex.vert">
+      <Filter>shaders</Filter>
     </None>
   </ItemGroup>
 </Project>

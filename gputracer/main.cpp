@@ -5,9 +5,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "imgui.h"
-#include "imgui_impl_glfw.h"
-#include "imgui_impl_opengl3.h"
+#include "imgui/imgui.h"
+#include "imgui/imgui_impl_glfw.h"
+#include "imgui/imgui_impl_opengl3.h"
 
 #include "Shader.h"
 #include "Camera.h"
@@ -17,9 +17,10 @@
 #include <random>
 #include <map>
 #include <regex>
+#include <filesystem>
 
 #include "TextEditor.h"
-#include "ImGuiFileDialog.h"
+#include "imgui/ImGuiFileDialog.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -43,7 +44,8 @@ void renderUI();
 void addTexture(unsigned int* id);
 void createErrorMarkers(std::vector<std::string> errors);
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize);
-void saveImage();
+void saveImage(int frame);
+void updateCamera(GLFWwindow* window);
 
 Shader screenQuad;
 ComputeShader* Channel0;
@@ -57,11 +59,12 @@ TextEditor* editor = nullptr;
 
 bool editor_open = true;
 bool output_open = true;
-bool settings_open = true;
+bool settings_open = false;
 bool fullscreen = false;
 bool show_open_file  = false;
 bool show_Save_new_file = false;
-
+bool running = false;
+bool rendering = false;
 // settings
 const unsigned int SCR_WIDTH = 1920;
 const unsigned int SCR_HEIGHT = 1200;
@@ -224,22 +227,25 @@ int main(int argc, char* argv[])
 
 	computeShaders = std::map<unsigned int, ComputeShader*>();
 
-	addTexture(&channel0Tex);
-	Channel0 = new ComputeShader("channel0.comp", channel0Tex);
-	Channel0->compile();
-	addTexture(&channel1Tex);
-	Channel1 = new ComputeShader("channel1.comp", channel1Tex);
-	Channel1->compile();
+	//addTexture(&channel0Tex);
+	//Channel0 = new ComputeShader("channel0.comp", channel0Tex);
+	//Channel0->compile();
+	//addTexture(&channel1Tex);
+	//Channel1 = new ComputeShader("channel1.comp", channel1Tex);
+	//Channel1->compile();
 
-	computeShaders.insert({ channel0Tex,Channel0 });
-	computeShaders.insert({ channel1Tex,Channel1 });
+	//computeShaders.insert({ channel0Tex,Channel0 });
+	//computeShaders.insert({ channel1Tex,Channel1 });
 	// editor->SetText(computeShaders[0]->computeCode);
 
 	screenQuad.use();
 	screenQuad.setInt("tex", 0);
 
-	// Create texture for opengl operation
-	// -----------------------------------
+
+	GLuint _ubo;
+	glGenBuffers(1, &_ubo);
+	campos = vec3(0.0f, 0, 2);
+	camera = Camera(campos, vec3(0, 1, 0));
 
 	// render loop
 	// -----------
@@ -265,6 +271,7 @@ int main(int argc, char* argv[])
 		lastFrame = currentFrame;
 
 		processInput(window);
+		updateCamera(window);
 
 		if (fCounter > 500)
 		{
@@ -282,26 +289,9 @@ int main(int argc, char* argv[])
 		
 		time += deltaTime;
 
-
-		////Channel0->use();
-		////// meet shadertoy compat
-		////Channel0->setFloat("iTime", time * speed);
-		////Channel0->setFloat("speed", speed);
-		////Channel0->setVec3("iMouse", mouse);
-		////Channel0->setInt("iFrame", fCounter);
-
-		////glBindImageTexture(GL_TEXTURE0 + 6, Channel0->ID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-		////glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-		////glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
-
-		////Channel1->use();
-		////Channel1->setFloat("iTime", time * speed);
-		////Channel1->setFloat("speed", speed);
-		////Channel1->setVec3("iMouse", mouse);
-		////Channel1->setInt("iFrame", fCounter);
-
-		//glBindImageTexture(GL_TEXTURE0 + 7, Channel1->ID, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-		//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		if (rendering) {
+			saveImage(fCounter);
+		}
 
 		// make sure writing to image has finished before read
 		glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
@@ -312,31 +302,38 @@ int main(int argc, char* argv[])
 
 		for (it = computeShaders.begin(); it != computeShaders.end(); it++)
 		{
-			it->second->use();
-			if (it->second->computePath.find("channel") == std::string::npos) {
-				glActiveTexture(GL_TEXTURE0 + channel0Tex);
-				glBindTexture(GL_TEXTURE_2D, channel0Tex);
-				it->second->setInt("iChannel0", channel0Tex);
-				glActiveTexture(GL_TEXTURE0 + channel1Tex);
-				glBindTexture(GL_TEXTURE_2D, channel1Tex);
-				it->second->setInt("iChannel1", channel1Tex);
+			if (running) {
+				it->second->use();
+
+				glBindBuffer(GL_UNIFORM_BUFFER, _ubo);
+				glBufferData(GL_UNIFORM_BUFFER, sizeof(FragUBO), (void*)&ubo, GL_DYNAMIC_DRAW);
+				glBindBufferBase(GL_UNIFORM_BUFFER, 1, _ubo);
+
+				if (it->second->computePath.find("channel") == std::string::npos) {
+					glActiveTexture(GL_TEXTURE0 + channel0Tex);
+					glBindTexture(GL_TEXTURE_2D, channel0Tex);
+					it->second->setInt("iChannel0", channel0Tex);
+					glActiveTexture(GL_TEXTURE0 + channel1Tex);
+					glBindTexture(GL_TEXTURE_2D, channel1Tex);
+					it->second->setInt("iChannel1", channel1Tex);
+				}
+				it->second->setInt("numLights", 1);
+				it->second->setFloat("specStrength", specStrength);
+				it->second->setFloat("exponent", exponent);
+
+				it->second->setFloat("time", time * speed);
+				// meet shadertoy compat 
+				it->second->setFloat("iTime", time * speed);
+				it->second->setFloat("speed", speed);
+				it->second->setVec3("iMouse", mouse);
+				it->second->setInt("iFrame", fCounter );
+
+				glBindImageTexture(GL_TEXTURE0 + it->first, it->first, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+				glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+				// make sure writing to image has finished before read
+				glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
 			}
-			it->second->setInt("numLights", 1);
-			it->second->setFloat("specStrength", specStrength);
-			it->second->setFloat("exponent", exponent);
-
-			it->second->setFloat("time", time * speed);
-			// meet shadertoy compat 
-			it->second->setFloat("iTime", time * speed);
-			it->second->setFloat("speed", speed);
-			it->second->setVec3("iMouse", mouse);
-			it->second->setInt("iFrame", fCounter );
-
-			glBindImageTexture(GL_TEXTURE0 + it->first, it->first, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-			// make sure writing to image has finished before read
-			glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
 
 			std::stringstream title;
 			title << it->second->computePath;
@@ -449,15 +446,18 @@ void processInput(GLFWwindow* window)
 		camera.ProcessKeyboard(LEFT, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		camera.ProcessKeyboard(RIGHT, deltaTime);
-	if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS)
-	{
-		saveImage();
+	if ((glfwGetKey(window, GLFW_KEY_F5) == GLFW_RELEASE)) {
+		running = !running;
 	}
-	if ((glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS))
-		recompileShader();
 	if ((glfwGetKey(window, GLFW_KEY_F9) == GLFW_PRESS)) {
 		fullscreen = !fullscreen;
 		std::cout << "Fullscreen " << fullscreen << std::endl;
+	}
+	if ((glfwGetKey(window, GLFW_KEY_F10) == GLFW_PRESS))
+		recompileShader();
+	if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS)
+	{
+		saveImage(-1);
 	}
 
 }
@@ -537,7 +537,7 @@ glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& vie
 	return newSize;
 }
 
-void saveImage() {
+void saveImage(int frame) {
 
 	if (currentShader == nullptr) {
 		return;
@@ -551,7 +551,7 @@ void saveImage() {
 
 	// Allocate buffer
 	unsigned char* buffer = new unsigned char[width * height * 4]; // 4 for RGBA
-
+	     
 	// Read pixels
 	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
 
@@ -570,8 +570,18 @@ void saveImage() {
 		}
 	}
 
+	std::stringstream ss;
+
+	if (frame >= 0) {
+		ss << "output_" << frame << ".png";
+
+	}
+	else {
+		ss << "output.png";
+	}
+
 	// Save image
-	stbi_write_png("output.png", width, height, 4, buffer, width * 4);
+	stbi_write_png(ss.str().c_str(), width, height, 4, buffer, width * 4);
 
 	// Clean up
 	delete[] buffer;
@@ -589,7 +599,7 @@ void renderMenu() {
 				try
 				{
 					// open files
-					cShaderFile.open("template.comp");
+					cShaderFile.open("shaders/template.comp");
 					std::stringstream cShaderStream;
 					cShaderStream << cShaderFile.rdbuf();
 					cShaderFile.close();
@@ -602,7 +612,6 @@ void renderMenu() {
 				catch (std::ifstream::failure& e)
 				{
 					std::cout << "ERROR::SHADER::FILE_NOT_SUCCESSFULLY_READ: " << e.what() << std::endl;
-					return;
 				}
 			}
 			if (ImGui::MenuItem("Load shader")) {
@@ -625,12 +634,16 @@ void renderMenu() {
 		if (ImGui::BeginMenu("Edit")) {
 
 			if (ImGui::MenuItem("Save image")) {
-				saveImage();
+				saveImage(-1);
 			}
 
 			if (ImGui::MenuItem("Recompile shader")) {
 				recompileShader();
 			}
+			if (ImGui::MenuItem("Render images")) {
+				rendering = true;
+			}
+
 			ImGui::EndMenu();
 
 		}
@@ -662,24 +675,31 @@ void renderMenu() {
 void renderUI() {
 
 	if (settings_open) {
-		settings_open = ImGui::Begin("Settings", &settings_open);
-
-		if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
-		{
+		if (!ImGui::Begin("Settings", &settings_open)) {
+			ImGui::End();
 		}
-		if (ImGui::DragFloat("Specular exponent", (float*)&exponent))
-		{
+		else {
+			if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
+			{
+			}
+			if (ImGui::DragFloat("Specular exponent", (float*)&exponent))
+			{
+			}
+			if (ImGui::DragFloat("Speed", (float*)&speed))
+			{
+			}
+			ImGui::End();
 		}
-		if (ImGui::DragFloat("Speed", (float*)&speed))
-		{
-		}
-
-		ImGui::End();
 	}
+
 	if (editor_open) {
 		ImGui::PushFont(editorFont);
-		editor_open = ImGui::Begin("Shader code", &editor_open);
-		editor->Render("Shader");
+		if (!ImGui::Begin("Shader code", &editor_open)) {
+			ImGui::End();
+		}
+		else {
+			editor->Render("Shader");
+		}
 		ImGui::End();
 		ImGui::PopFont();
 	}
@@ -699,14 +719,41 @@ void renderUI() {
 				std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
 				std::string filePath = ImGuiFileDialog::Instance()->GetCurrentPath();
 				// action
+
+				std::filesystem::path pathObj(filePathName);
+				std::string fileName = pathObj.stem().string();
+				
+				std::filesystem::path channel0Path(filePath + "/" + fileName + "_channel0.comp");
+
+				if (std::filesystem::exists(channel0Path)) {
+					channel0Tex = 0;
+					addTexture(&channel0Tex);
+					ComputeShader* shader = new ComputeShader(channel0Path.string().c_str(), channel0Tex);
+					shader->compile();
+					computeShaders.insert({ channel0Tex,shader });
+				}
+
+				std::filesystem::path channel1Path(filePath + "/" + fileName + "_channel1.comp");
+
+				if (std::filesystem::exists(channel1Path)) {
+					channel1Tex = 0;
+					addTexture(&channel1Tex);
+					ComputeShader* shader = new ComputeShader(channel1Path.string().c_str(), channel1Tex);
+					shader->compile();
+					computeShaders.insert({ channel1Tex,shader });
+				}
+
 				unsigned int id = 0;
 
 				addTexture(&id);
 
-				ComputeShader* shader = new ComputeShader(filePathName.c_str(),id);
+				ComputeShader* shader = new ComputeShader(filePathName.c_str(), id);
 				shader->compile();
 				computeShaders.insert({ id,shader });
 				editor->SetText(computeShaders[id]->computeCode);
+
+
+
 				currentShader = shader;
 			}
 
@@ -816,5 +863,32 @@ int quitApplication() {
 	glfwTerminate();
 
 	return EXIT_SUCCESS;
+
+}
+
+void updateCamera(GLFWwindow* window) {
+
+	vec3 firstPersonUp = glm::vec3(0, 1, 0);
+	// mat4 view = lookAt(campos, campos + firstPersonDirection, firstPersonUp);
+
+	mat4 view = camera.GetViewMatrix();
+
+	// aprox. 103 degrees FoV horizontal like Overwatch
+	float fovVertical = 1.24f;
+
+	int width, height;
+	glfwGetWindowSize(window, &width, &height);
+
+	float aspectRatio = static_cast<float>(width) / static_cast<float>(height);
+	float near = .1f, far = 300.0f;
+	mat4 projection = perspective(fovVertical, aspectRatio, near, far);
+
+	// Unproject camera for world space ray
+	mat4 inversinvProjectionView = inverse(projection * view);
+	// fill the buffer, you do this anytime any of the lights change
+
+	ubo.far = far;
+	ubo.near = near;
+	ubo.invProjectionView = inversinvProjectionView;
 
 }

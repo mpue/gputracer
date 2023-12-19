@@ -192,6 +192,7 @@
     <None Include="erosion_channel0.comp" />
     <None Include="erosion_channel1.comp" />
     <None Include="erosion.comp" />
+    <None Include="functions.comp" />
     <None Include="helix.comp" />
     <None Include="imgui\imgui.ini" />
     <None Include="mandelbulb.comp" />

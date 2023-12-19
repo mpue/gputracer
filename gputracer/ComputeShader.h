@@ -76,7 +76,6 @@ public:
         glAttachShader(ID, compute);
         glLinkProgram(ID);
 
-
         std::vector<std::string> progErrors =  checkCompileErrors(ID, "PROGRAM");
         // delete the shaders as they're linked into our program now and no longer necessary
         glDeleteShader(compute);
@@ -200,7 +199,6 @@ private:
                 std::cout << "ERROR::SHADER_COMPILATION_ERROR of type: " << type << "\n" << infoLog << "\n -- --------------------------------------------------- -- " << std::endl;
 
                 return split(infoLog, '\n');
-
             }
         }
         else

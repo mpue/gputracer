@@ -44,8 +44,9 @@ void renderUI();
 void addTexture(unsigned int* id);
 void createErrorMarkers(std::vector<std::string> errors);
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize);
-void saveImage(int frame);
+void saveImage(int frame, unsigned int texture);
 void updateCamera(GLFWwindow* window);
+std::vector<unsigned int*> texture_list;
 
 Shader screenQuad;
 ComputeShader* Channel0;
@@ -57,6 +58,7 @@ vec3 campos;
 
 TextEditor* editor = nullptr;
 
+bool texture_slots_open = true;
 bool editor_open = true;
 bool output_open = true;
 bool settings_open = false;
@@ -80,7 +82,7 @@ float lastFrame = 0.0f;
 bool navigate_mouse = false;
 
 // texture size
-const unsigned int TEXTURE_WIDTH = 1920, TEXTURE_HEIGHT = 1200;
+const unsigned int TEXTURE_WIDTH = 1920, TEXTURE_HEIGHT = 1080;
 
 struct Sphere
 {
@@ -140,6 +142,9 @@ int main(int argc, char* argv[])
 	for (int i = 0; i < 64; i++) {
 		visibles[i] = true;
 	}
+
+	texture_list = std::vector<unsigned int*>();
+
 
 	// glfw: initialize and configure
 	// ------------------------------
@@ -224,23 +229,10 @@ int main(int argc, char* argv[])
 	// build and compile shaders
 	// -------------------------
 	screenQuad = Shader("vertex.vert", "fragment.frag");
-
 	computeShaders = std::map<unsigned int, ComputeShader*>();
-
-	//addTexture(&channel0Tex);
-	//Channel0 = new ComputeShader("channel0.comp", channel0Tex);
-	//Channel0->compile();
-	//addTexture(&channel1Tex);
-	//Channel1 = new ComputeShader("channel1.comp", channel1Tex);
-	//Channel1->compile();
-
-	//computeShaders.insert({ channel0Tex,Channel0 });
-	//computeShaders.insert({ channel1Tex,Channel1 });
-	// editor->SetText(computeShaders[0]->computeCode);
 
 	screenQuad.use();
 	screenQuad.setInt("tex", 0);
-
 
 	GLuint _ubo;
 	glGenBuffers(1, &_ubo);
@@ -255,42 +247,43 @@ int main(int argc, char* argv[])
 
 	while (!glfwWindowShouldClose(window))
 	{
+		ImGui_ImplOpenGL3_NewFrame();
+		ImGui_ImplGlfw_NewFrame();			
 		if (!fullscreen) {
-			ImGui_ImplOpenGL3_NewFrame();
-			ImGui_ImplGlfw_NewFrame();			
 			ImGui::NewFrame();
 			ImGui::PushFont(defaultFont);;
 			renderMenu();
 			ImGui::DockSpaceOverViewport();	
-
 		}
-	
-		// Set frame time
-		float currentFrame = glfwGetTime();
-		deltaTime = currentFrame - lastFrame;
-		lastFrame = currentFrame;
-
-		processInput(window);
-		updateCamera(window);
-
-		if (fCounter > 500)
-		{
-			std::cout << "FPS: " << 1 / deltaTime << "\r";
-			fCounter = 0;
-			if (fps > 0) {
-				fps = (fps + 1 / deltaTime) / 2;
-			}
-			fps = 1 / deltaTime;
-		}
-		else
-		{
-			fCounter++;
-		}
-		
-		time += deltaTime;
 
 		if (rendering) {
-			saveImage(fCounter);
+			saveImage(fCounter, *texture_list.at(0));
+			deltaTime = 1.0 / 60.0f;
+			time += deltaTime;
+			fCounter++;
+		}
+		else {
+			// Set frame time
+			float currentFrame = glfwGetTime();
+			deltaTime = currentFrame - lastFrame;
+			lastFrame = currentFrame;
+
+			if (fCounter > 500)
+			{
+				std::cout << "FPS: " << 1 / deltaTime << "\r";
+				fCounter = 0;
+				if (fps > 0) {
+					fps = (fps + 1 / deltaTime) / 2;
+				}
+				fps = 1 / deltaTime;
+			}
+			else
+			{
+				fCounter++;
+			}
+
+			time += deltaTime;
+
 		}
 
 		// make sure writing to image has finished before read
@@ -385,6 +378,10 @@ int main(int argc, char* argv[])
 	
 		// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
 		// -------------------------------------------------------------------------------
+		ImGui::Render();
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+		processInput(window);
+		updateCamera(window);
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
@@ -436,8 +433,10 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 
 void processInput(GLFWwindow* window)
 {
-	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		fullscreen = false;
+		rendering = false;
+	}
 	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		camera.ProcessKeyboard(FORWARD, deltaTime);
 	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -457,7 +456,7 @@ void processInput(GLFWwindow* window)
 		recompileShader();
 	if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS)
 	{
-		saveImage(-1);
+		saveImage(-1, * texture_list.at(texture_list.size() - 1));
 	}
 
 }
@@ -537,15 +536,11 @@ glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& vie
 	return newSize;
 }
 
-void saveImage(int frame) {
-
-	if (currentShader == nullptr) {
-		return;
-	}
-
+void saveImage(int frame, unsigned int texture) {
+		
 	GLint width, height;
-	glActiveTexture(GL_TEXTURE0 + currentShader->textureUnit);
-	glBindTexture(GL_TEXTURE_2D, currentShader->textureUnit);
+	glActiveTexture(GL_TEXTURE0 + texture_list.size() - 1) ;
+	glBindTexture(GL_TEXTURE_2D,*texture_list.at(texture_list.size() - 1));
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
 
@@ -634,7 +629,7 @@ void renderMenu() {
 		if (ImGui::BeginMenu("Edit")) {
 
 			if (ImGui::MenuItem("Save image")) {
-				saveImage(-1);
+				saveImage(-1, *texture_list.at(texture_list.size() - 1));
 			}
 
 			if (ImGui::MenuItem("Recompile shader")) {
@@ -692,6 +687,30 @@ void renderUI() {
 		}
 	}
 
+	if (texture_slots_open) {
+		if (!ImGui::Begin("Texture slots", &texture_slots_open)) {
+			ImGui::End();
+		}
+
+		ImGui::Columns(4, NULL);
+		ImGui::Separator();
+
+		for (int i = 0; i < texture_list.size(); i++) {
+			if (i > 0 && i % 4 == 0) {
+				ImGui::Separator();
+			}
+			vec2 imageSize = vec2(128, 128);
+			
+			ImGui::Image((void*)(intptr_t)*texture_list.at(i), ImVec2(imageSize.x, imageSize.y), {0, 1}, {1, 0});
+			
+			ImGui::NextColumn();
+		}
+		ImGui::Columns(1);
+		ImGui::Separator();
+		ImGui::End();
+
+	}
+
 	if (editor_open) {
 		ImGui::PushFont(editorFont);
 		if (!ImGui::Begin("Shader code", &editor_open)) {
@@ -743,14 +762,14 @@ void renderUI() {
 					computeShaders.insert({ channel1Tex,shader });
 				}
 
-				unsigned int id = 0;
+				unsigned int* id = new unsigned int;
 
-				addTexture(&id);
+				addTexture(id);
 
-				ComputeShader* shader = new ComputeShader(filePathName.c_str(), id);
+				ComputeShader* shader = new ComputeShader(filePathName.c_str(), *id);
 				shader->compile();
-				computeShaders.insert({ id,shader });
-				editor->SetText(computeShaders[id]->computeCode);
+				computeShaders.insert({ *id,shader });
+				editor->SetText(computeShaders[*id]->computeCode);
 
 
 
@@ -807,12 +826,11 @@ void renderUI() {
 
 	}
 
-	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
 
 void addTexture(unsigned int* id) {
+	texture_list.push_back(id);
 	glGenTextures(1, id);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, *id);

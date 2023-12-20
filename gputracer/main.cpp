@@ -35,8 +35,6 @@ void processInput(GLFWwindow* window);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
-void myKeyCallbackFunc(GLFWwindow* window, int key, int scancode, int action, int mods);
-void character_callback(GLFWwindow* window, unsigned int codepoint);
 void recompileShader();
 void renderMenu();
 int quitApplication();
@@ -58,6 +56,9 @@ vec3 campos;
 
 TextEditor* editor = nullptr;
 
+unsigned int quadVAO = 0;
+unsigned int quadVBO;
+
 bool texture_slots_open = true;
 bool editor_open = true;
 bool output_open = true;
@@ -67,6 +68,7 @@ bool show_open_file  = false;
 bool show_Save_new_file = false;
 bool running = false;
 bool rendering = false;
+
 // settings
 const unsigned int SCR_WIDTH = 1920;
 const unsigned int SCR_HEIGHT = 1200;
@@ -166,10 +168,10 @@ int main(int argc, char* argv[])
 		glfwTerminate();
 		return -1;
 	}
+
 	glfwMakeContextCurrent(window);
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 	glfwSetCursorPosCallback(window, mouse_callback);
-	glfwSetCharCallback(window, character_callback);
 	glfwSetScrollCallback(window, scroll_callback);
 	glfwSetMouseButtonCallback(window, mouse_button_callback);
 	glfwSwapInterval(0);
@@ -199,7 +201,7 @@ int main(int argc, char* argv[])
 
 	// Setup Platform/Renderer backends
 	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 130");	
+	ImGui_ImplOpenGL3_Init("#version 450");	
 
 	editor = new TextEditor();
 	// query limitations
@@ -386,15 +388,17 @@ int main(int argc, char* argv[])
 		glfwPollEvents();
 	}
 
-	// optional: de-allocate all resources once they've outlived their purpose:
-	// ------------------------------------------------------------------------
+	for (auto& pair : computeShaders) {
+		delete pair.second;  // pair.second is the pointer to the object
+	}
+
+	// Clear the map
+	computeShaders.clear();
+
 	quitApplication();
 }
 
-// renderQuad() renders a 1x1 XY quad in NDC
-// -----------------------------------------
-unsigned int quadVAO = 0;
-unsigned int quadVBO;
+
 void renderQuad()
 {
 	if (quadVAO == 0)
@@ -500,16 +504,6 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		navigate_mouse = true;
 	else if (button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_RELEASE)
 		navigate_mouse = false;
-}
-void character_callback(GLFWwindow* window, unsigned int c)
-{
-	if (isprint(c) || isspace(c))
-	{
-		// editor->EnterCharacter(char(c));
-	}
-}
-
-void myKeyCallbackFunc(GLFWwindow* window, int key, int scancode, int action, int mods) {
 }
 
 void recompileShader() {
@@ -654,6 +648,9 @@ void renderMenu() {
 			}
 			if (ImGui::MenuItem("Shader settings")) {
 				settings_open = true;
+			}
+			if (ImGui::MenuItem("Texture slots")) {
+				texture_slots_open = true;
 			}
 			if (ImGui::MenuItem("Fullscreen")) {
 				fullscreen = true;

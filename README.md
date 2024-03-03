@@ -10,7 +10,7 @@ Although it is in a very early stage, it already can run Shaders from the online
 
 View and edit multiple shaders at once.
 
-![Screenshot](https://raw.githubusercontent.com/mpue/gputracer/main/doc/screen1.png)
+![Screenshot](https://raw.githubusercontent.com/mpue/gputracer/main/doc/screen2.png)
 
 Currently you can edit shaders, preview and render the images to disk as well.
 

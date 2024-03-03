@@ -183,10 +183,11 @@
     <ClInclude Include="Shader.h" />
     <ClInclude Include="stb_image_write.h" />
     <ClInclude Include="TextEditor.h" />
-    <ClInclude Include="UI\AWindow.h" />
+    <ClInclude Include="UI\AbstractWindow.h" />
     <ClInclude Include="UI\Dialog.h" />
     <ClInclude Include="UI\IView.h" />
     <ClInclude Include="UI\SettingsWindow.h" />
+    <ClInclude Include="WindowManager.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="erosion_channel0.comp" />

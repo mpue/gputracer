@@ -139,10 +139,13 @@
     <ClInclude Include="imgui\imstb_truetype.h">
       <Filter>Quelldateien\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="UI\AWindow.h">
+    <ClInclude Include="UI\AbstractWindow.h">
       <Filter>Headerdateien\UI</Filter>
     </ClInclude>
     <ClInclude Include="UI\SettingsWindow.h">
+      <Filter>Headerdateien\UI</Filter>
+    </ClInclude>
+    <ClInclude Include="WindowManager.h">
       <Filter>Headerdateien\UI</Filter>
     </ClInclude>
   </ItemGroup>

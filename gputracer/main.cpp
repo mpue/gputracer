@@ -44,6 +44,9 @@ void createErrorMarkers(std::vector<std::string> errors);
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize);
 void saveImage(int frame, unsigned int texture);
 void updateCamera(GLFWwindow* window);
+void createFramebuffer();
+
+
 std::vector<unsigned int*> texture_list;
 
 Shader screenQuad;
@@ -53,6 +56,9 @@ unsigned int channel0Tex;
 unsigned int channel1Tex;
 Camera camera;
 vec3 campos;
+unsigned int framebuffer;
+unsigned int textureColorbuffer;
+unsigned int rbo;
 
 TextEditor* editor = nullptr;
 
@@ -228,6 +234,8 @@ int main(int argc, char* argv[])
 
 	std::cout << "Number of invocations in a single local work group that may be dispatched to a compute shader " << max_compute_work_group_invocations << std::endl;
 
+	createFramebuffer();
+
 	// build and compile shaders
 	// -------------------------
 	screenQuad = Shader("vertex.vert", "fragment.frag");
@@ -249,9 +257,9 @@ int main(int argc, char* argv[])
 
 	while (!glfwWindowShouldClose(window))
 	{
-		ImGui_ImplOpenGL3_NewFrame();
-		ImGui_ImplGlfw_NewFrame();			
 		if (!fullscreen) {
+			ImGui_ImplOpenGL3_NewFrame();
+			ImGui_ImplGlfw_NewFrame();			
 			ImGui::NewFrame();
 			ImGui::PushFont(defaultFont);;
 			renderMenu();
@@ -291,9 +299,8 @@ int main(int argc, char* argv[])
 		// make sure writing to image has finished before read
 		glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
 
-		std::map<unsigned int, ComputeShader*>::iterator it;
-
 		int v_idx = 0;
+		std::map<unsigned int, ComputeShader*>::iterator it;
 
 		for (it = computeShaders.begin(); it != computeShaders.end(); it++)
 		{
@@ -323,7 +330,9 @@ int main(int argc, char* argv[])
 				it->second->setVec3("iMouse", mouse);
 				it->second->setInt("iFrame", fCounter );
 
+
 				glBindImageTexture(GL_TEXTURE0 + it->first, it->first, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+				// // glBindImageTexture(GL_TEXTURE0, textureColorbuffer, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 				glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
 
 				// make sure writing to image has finished before read
@@ -333,7 +342,7 @@ int main(int argc, char* argv[])
 			std::stringstream title;
 			title << it->second->computePath;
 
-			if (visibles[v_idx]) {
+			if (visibles[v_idx] && !fullscreen) {
 				if (ImGui::Begin(title.str().c_str(), &visibles[v_idx])) {
 
 					// Check if the window is focused and if the left mouse button was clicked
@@ -367,21 +376,26 @@ int main(int argc, char* argv[])
 
 			
 		}
+				
 		// render image to quad
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		
 		if (fullscreen) {
 			screenQuad.use();
+			glActiveTexture(GL_TEXTURE0 + *texture_list.at(0));
+			glBindTexture(GL_TEXTURE_2D, *texture_list.at(0));
+			screenQuad.setInt("tex", *texture_list.at(0));
 			renderQuad();
 		}
 		else {
 			renderUI();
+			ImGui::Render();
+			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		}
 	
+
 		// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
 		// -------------------------------------------------------------------------------
-		ImGui::Render();
-		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		processInput(window);
 		updateCamera(window);
 		glfwSwapBuffers(window);
@@ -452,6 +466,12 @@ void processInput(GLFWwindow* window)
 	if ((glfwGetKey(window, GLFW_KEY_F5) == GLFW_RELEASE)) {
 		running = !running;
 	}
+	if (glfwGetKey(window, GLFW_KEY_F8) == GLFW_PRESS)
+	{
+		fullscreen = true;
+		rendering = true;
+	}
+
 	if ((glfwGetKey(window, GLFW_KEY_F9) == GLFW_PRESS)) {
 		fullscreen = !fullscreen;
 		std::cout << "Fullscreen " << fullscreen << std::endl;
@@ -531,10 +551,11 @@ glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& vie
 }
 
 void saveImage(int frame, unsigned int texture) {
-		
+
 	GLint width, height;
-	glActiveTexture(GL_TEXTURE0 + texture_list.size() - 1) ;
-	glBindTexture(GL_TEXTURE_2D,*texture_list.at(texture_list.size() - 1));
+	glActiveTexture(GL_TEXTURE0) ;
+	glBindTexture(GL_TEXTURE_2D,textureColorbuffer);
+
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
 
@@ -768,8 +789,6 @@ void renderUI() {
 				computeShaders.insert({ *id,shader });
 				editor->SetText(computeShaders[*id]->computeCode);
 
-
-
 				currentShader = shader;
 			}
 
@@ -905,5 +924,29 @@ void updateCamera(GLFWwindow* window) {
 	ubo.far = far;
 	ubo.near = near;
 	ubo.invProjectionView = inversinvProjectionView;
+
+}
+
+void createFramebuffer() {
+	glGenFramebuffers(1, &framebuffer);
+	glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+	glGenTextures(1, &textureColorbuffer);
+	glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, TEXTURE_WIDTH, TEXTURE_HEIGHT, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	// attach it to currently bound framebuffer object
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, textureColorbuffer, 0);
+
+	glGenRenderbuffers(1, &rbo);
+	glBindRenderbuffer(GL_RENDERBUFFER, rbo);
+	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+	glBindRenderbuffer(GL_RENDERBUFFER, 0);
+	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
+	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 }

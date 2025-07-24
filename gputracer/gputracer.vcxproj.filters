@@ -62,19 +62,10 @@
     <Text Include="vertex.vert">
       <Filter>Quelldateien</Filter>
     </Text>
-    <Text Include="raytrace.comp">
-      <Filter>Quelldateien</Filter>
-    </Text>
     <Text Include="compute.comp">
       <Filter>Quelldateien</Filter>
     </Text>
     <Text Include="fragment.frag">
-      <Filter>Quelldateien</Filter>
-    </Text>
-    <Text Include="patterns.comp">
-      <Filter>Quelldateien</Filter>
-    </Text>
-    <Text Include="plasma.comp">
       <Filter>Quelldateien</Filter>
     </Text>
   </ItemGroup>
@@ -148,15 +139,15 @@
     <ClInclude Include="WindowManager.h">
       <Filter>Headerdateien\UI</Filter>
     </ClInclude>
+    <ClInclude Include="ShaderBrowser.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
+    <ClInclude Include="ShaderClip.h">
+      <Filter>Quelldateien</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="helix.comp">
-      <Filter>Quelldateien</Filter>
-    </None>
-    <None Include="mandelbulb.comp">
-      <Filter>Quelldateien</Filter>
-    </None>
-    <None Include="ornaments.comp">
       <Filter>Quelldateien</Filter>
     </None>
     <None Include="erosion_channel0.comp">
@@ -168,26 +159,8 @@
     <None Include="erosion.comp">
       <Filter>Quelldateien</Filter>
     </None>
-    <None Include="rainforest_channel0.comp">
-      <Filter>Quelldateien</Filter>
-    </None>
-    <None Include="rainforest.comp">
-      <Filter>Quelldateien</Filter>
-    </None>
     <None Include="imgui\imgui.ini">
       <Filter>Quelldateien\imgui</Filter>
-    </None>
-    <None Include="shaders\anotherTest.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\blah.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\blah2.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\blahblah.comp">
-      <Filter>shaders</Filter>
     </None>
     <None Include="shaders\checkers.comp">
       <Filter>shaders</Filter>
@@ -204,13 +177,7 @@
     <None Include="shaders\erosion_channel1.comp">
       <Filter>shaders</Filter>
     </None>
-    <None Include="shaders\fragment.frag">
-      <Filter>shaders</Filter>
-    </None>
     <None Include="shaders\helix.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\landscape.comp">
       <Filter>shaders</Filter>
     </None>
     <None Include="shaders\mandelbulb.comp">
@@ -222,34 +189,10 @@
     <None Include="shaders\patterns.comp">
       <Filter>shaders</Filter>
     </None>
-    <None Include="shaders\pipi.comp">
-      <Filter>shaders</Filter>
-    </None>
     <None Include="shaders\plasma.comp">
       <Filter>shaders</Filter>
     </None>
-    <None Include="shaders\rainforest.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\rainforest_channel0.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\raymarch.comp">
-      <Filter>shaders</Filter>
-    </None>
     <None Include="shaders\raytrace.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\template.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\test.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\test245.comp">
-      <Filter>shaders</Filter>
-    </None>
-    <None Include="shaders\vertex.vert">
       <Filter>shaders</Filter>
     </None>
     <None Include="functions.comp">

@@ -1,4 +1,4 @@
-#include <glad/glad.h>
+﻿#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
@@ -21,16 +21,21 @@
 
 #include "TextEditor.h"
 #include "imgui/ImGuiFileDialog.h"
+#include "ShaderBrowser.h"
+#include "ShaderClip.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-bool visibles[64] = { true };
 
 using namespace glm;
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void renderQuad();
+int InitGL(bool& retFlag);
+void InitUI();
+void QueryLimits();
+void DispatchAndDisplay(GLuint _ubo, float time, int fCounter);
 void processInput(GLFWwindow* window);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
@@ -46,8 +51,11 @@ void saveImage(int frame, unsigned int texture);
 void updateCamera(GLFWwindow* window);
 void createFramebuffer();
 
+GLFWwindow* window = nullptr;
 
 std::vector<unsigned int*> texture_list;
+std::map<unsigned int, bool> visibles;
+std::vector<unsigned int> shadersToDelete;
 
 Shader screenQuad;
 ComputeShader* Channel0;
@@ -70,7 +78,7 @@ bool editor_open = true;
 bool output_open = true;
 bool settings_open = false;
 bool fullscreen = false;
-bool show_open_file  = false;
+bool show_open_file = false;
 bool show_Save_new_file = false;
 bool running = false;
 bool rendering = false;
@@ -91,6 +99,9 @@ bool navigate_mouse = false;
 
 // texture size
 const unsigned int TEXTURE_WIDTH = 1920, TEXTURE_HEIGHT = 1080;
+
+std::unique_ptr<ShaderBrowser> shaderBrowser;
+void load(const std::string& filePath, const std::string& filePathName);
 
 struct Sphere
 {
@@ -129,111 +140,26 @@ float fps = 0;
 
 std::map<unsigned int, ComputeShader*> computeShaders;
 
-// ComputeShader computeShaders[8];
 unsigned int textures[16];
 
 uint numshaders = 0;
 ComputeShader* currentShader = nullptr;
 
-uint ToUInt(int r , int g , int b , int a)
-{
-	return (uint)r << 24 | (uint)g << 16 | (uint)b << 8 | (uint)a;
-}
-
-double generateSineWave(double frequency, double amplitude, double time)
-{
-	return amplitude * std::sin(2 * PI * frequency * time);
-}
-
 int main(int argc, char* argv[])
 {
 	for (int i = 0; i < 64; i++) {
-		visibles[i] = true;
+		visibles[i] = false;
 	}
 
-	texture_list = std::vector<unsigned int*>();
+	bool retFlag;
+	int retVal = InitGL(retFlag);
+	if (retFlag) return retVal;
 
-
-	// glfw: initialize and configure
-	// ------------------------------
-	glfwInit();
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-
-#ifdef __APPLE__
-	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#endif
-
-	// glfw window creation
-	// --------------------
-	GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "gputracer", NULL, NULL);
-	if (window == NULL)
-	{
-		std::cout << "Failed to create GLFW window" << std::endl;
-		glfwTerminate();
-		return -1;
-	}
-
-	glfwMakeContextCurrent(window);
-	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	glfwSetCursorPosCallback(window, mouse_callback);
-	glfwSetScrollCallback(window, scroll_callback);
-	glfwSetMouseButtonCallback(window, mouse_button_callback);
-	glfwSwapInterval(0);
-
-	// glad: load all OpenGL function pointers
-	// ---------------------------------------
-	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-	{
-		std::cout << "Failed to initialize GLAD" << std::endl;
-		return -1;
-	}
-
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-	(void)io;
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
-	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
-	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-
-	editorFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 18.0f);
-	defaultFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\arial.ttf", 18.0f);
-
-	// Setup Dear ImGui style
-	ImGui::StyleColorsDark();
-	// ImGui::StyleColorsLight();
-
-	// Setup Platform/Renderer backends
-	ImGui_ImplGlfw_InitForOpenGL(window, true);
-	ImGui_ImplOpenGL3_Init("#version 450");	
+	InitUI();
 
 	editor = new TextEditor();
-	// query limitations
-	// -----------------
-	int max_compute_work_group_count[3];
-	int max_compute_work_group_size[3];
-	int max_compute_work_group_invocations;
-
-	for (int idx = 0; idx < 3; idx++)
-	{
-		glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, idx, &max_compute_work_group_count[idx]);
-		glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, idx, &max_compute_work_group_size[idx]);
-	}
-	glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &max_compute_work_group_invocations);
-
-	std::cout << "OpenGL Limitations: " << std::endl;
-	std::cout << "maximum number of work groups in X dimension " << max_compute_work_group_count[0] << std::endl;
-	std::cout << "maximum number of work groups in Y dimension " << max_compute_work_group_count[1] << std::endl;
-	std::cout << "maximum number of work groups in Z dimension " << max_compute_work_group_count[2] << std::endl;
-
-	std::cout << "maximum size of a work group in X dimension " << max_compute_work_group_size[0] << std::endl;
-	std::cout << "maximum size of a work group in Y dimension " << max_compute_work_group_size[1] << std::endl;
-	std::cout << "maximum size of a work group in Z dimension " << max_compute_work_group_size[2] << std::endl;
-
-	std::cout << "Number of invocations in a single local work group that may be dispatched to a compute shader " << max_compute_work_group_invocations << std::endl;
-
+	editor->SetLanguageDefinition(TextEditor::LanguageDefinition::GLSL());
+	QueryLimits();
 	createFramebuffer();
 
 	// build and compile shaders
@@ -259,11 +185,11 @@ int main(int argc, char* argv[])
 	{
 		if (!fullscreen) {
 			ImGui_ImplOpenGL3_NewFrame();
-			ImGui_ImplGlfw_NewFrame();			
+			ImGui_ImplGlfw_NewFrame();
 			ImGui::NewFrame();
 			ImGui::PushFont(defaultFont);;
 			renderMenu();
-			ImGui::DockSpaceOverViewport();	
+			ImGui::DockSpaceOverViewport();
 		}
 
 		if (rendering) {
@@ -296,90 +222,16 @@ int main(int argc, char* argv[])
 
 		}
 
-		// make sure writing to image has finished before read
-		glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
+		DispatchAndDisplay(_ubo, time, fCounter);
 
-		int v_idx = 0;
-		std::map<unsigned int, ComputeShader*>::iterator it;
+		shaderBrowser = std::make_unique<ShaderBrowser>("./shaders/");
+		shaderBrowser->onShaderSelected = [](const std::filesystem::path& path) {
+			load("./shaders", path.filename().string());
+			};
 
-		for (it = computeShaders.begin(); it != computeShaders.end(); it++)
-		{
-			if (running) {
-				it->second->use();
-
-				glBindBuffer(GL_UNIFORM_BUFFER, _ubo);
-				glBufferData(GL_UNIFORM_BUFFER, sizeof(FragUBO), (void*)&ubo, GL_DYNAMIC_DRAW);
-				glBindBufferBase(GL_UNIFORM_BUFFER, 1, _ubo);
-
-				if (it->second->computePath.find("channel") == std::string::npos) {
-					glActiveTexture(GL_TEXTURE0 + channel0Tex);
-					glBindTexture(GL_TEXTURE_2D, channel0Tex);
-					it->second->setInt("iChannel0", channel0Tex);
-					glActiveTexture(GL_TEXTURE0 + channel1Tex);
-					glBindTexture(GL_TEXTURE_2D, channel1Tex);
-					it->second->setInt("iChannel1", channel1Tex);
-				}
-				it->second->setInt("numLights", 1);
-				it->second->setFloat("specStrength", specStrength);
-				it->second->setFloat("exponent", exponent);
-
-				it->second->setFloat("time", time * speed);
-				// meet shadertoy compat 
-				it->second->setFloat("iTime", time * speed);
-				it->second->setFloat("speed", speed);
-				it->second->setVec3("iMouse", mouse);
-				it->second->setInt("iFrame", fCounter );
-
-
-				glBindImageTexture(GL_TEXTURE0 + it->first, it->first, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-				// // glBindImageTexture(GL_TEXTURE0, textureColorbuffer, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
-				glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
-
-				// make sure writing to image has finished before read
-				glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
-			}
-
-			std::stringstream title;
-			title << it->second->computePath;
-
-			if (visibles[v_idx] && !fullscreen) {
-				if (ImGui::Begin(title.str().c_str(), &visibles[v_idx])) {
-
-					// Check if the window is focused and if the left mouse button was clicked
-					if (ImGui::IsWindowFocused() && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-						editor->SetText(it->second->computeCode);
-						currentShader = it->second;
-					}
-
-					ImVec2 windowPos = ImGui::GetItemRectMin();
-
-					vec2 windowSize;
-					windowSize.x = ImGui::GetWindowContentRegionMax().x - windowPos.x;
-					windowSize.y = ImGui::GetWindowContentRegionMax().y - windowPos.y;
-
-					vec2 imageSize = vec2(TEXTURE_WIDTH, TEXTURE_HEIGHT);
-
-					ImGui::Image((void*)(intptr_t)it->first, ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
-					ImDrawList* drawList = ImGui::GetWindowDrawList();
-
-					windowPos.x += 20;
-					windowPos.y += 50;
-					std::stringstream ss;
-					ss << "FPS : " << fps;
-					ss.str();
-					drawList->AddText(windowPos, ToUInt(255, 255, 255, 255), ss.str().c_str());
-				}
-				ImGui::End();
-				
-			}
-			v_idx++;
-
-			
-		}
-				
 		// render image to quad
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		
+
 		if (fullscreen) {
 			screenQuad.use();
 			glActiveTexture(GL_TEXTURE0 + *texture_list.at(0));
@@ -392,7 +244,7 @@ int main(int argc, char* argv[])
 			ImGui::Render();
 			ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 		}
-	
+
 
 		// glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
 		// -------------------------------------------------------------------------------
@@ -410,6 +262,208 @@ int main(int argc, char* argv[])
 	computeShaders.clear();
 
 	quitApplication();
+}
+
+void DispatchAndDisplay(GLuint _ubo, float time, int fCounter)
+{
+	// make sure writing to image has finished before read
+	glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
+
+	int v_idx = 0;
+	std::map<unsigned int, ComputeShader*>::iterator it;
+
+	std::vector<std::pair<unsigned int, ComputeShader*>> copy(
+		computeShaders.begin(), computeShaders.end()
+	);
+
+	for (auto& it : copy)
+	{
+		if (running) {
+			it.second->use();
+
+			glBindBuffer(GL_UNIFORM_BUFFER, _ubo);
+			glBufferData(GL_UNIFORM_BUFFER, sizeof(FragUBO), (void*)&ubo, GL_DYNAMIC_DRAW);
+			glBindBufferBase(GL_UNIFORM_BUFFER, 1, _ubo);
+
+			if (it.second->computePath.find("channel") == std::string::npos) {
+				glActiveTexture(GL_TEXTURE0 + channel0Tex);
+				glBindTexture(GL_TEXTURE_2D, channel0Tex);
+				it.second->setInt("iChannel0", channel0Tex);
+				glActiveTexture(GL_TEXTURE0 + channel1Tex);
+				glBindTexture(GL_TEXTURE_2D, channel1Tex);
+				it.second->setInt("iChannel1", channel1Tex);
+			}
+			// meet shadertoy compat 
+			it.second->setInt("numLights", 1);
+			it.second->setFloat("specStrength", specStrength);
+			it.second->setFloat("exponent", exponent);
+			it.second->setFloat("time", time * speed);
+			it.second->setFloat("iTime", time * speed);
+			it.second->setFloat("speed", speed);
+			it.second->setVec3("iMouse", mouse);
+			it.second->setInt("iFrame", fCounter);
+
+			// make sure writing to image has finished before read
+			glBindImageTexture(GL_TEXTURE0 + it.first, it.first, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
+
+			glDispatchCompute((unsigned int)TEXTURE_WIDTH / 10, (unsigned int)TEXTURE_HEIGHT / 10, 1);
+			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+
+		}
+
+		std::stringstream title;
+		title << it.second->computePath;
+
+
+	}
+	// Erstelle eine Kopie der computeShaders, um Iterator-Probleme zu vermeiden
+	std::vector<std::pair<unsigned int, ComputeShader*>> shaderList(
+		computeShaders.begin(), computeShaders.end()
+	);
+
+	for (auto& it : shaderList) {
+		unsigned int id = it.first;
+		ComputeShader* shader = it.second;
+
+		// Sichtbarkeitsstatus initialisieren, falls neu
+		if (visibles.count(id) == 0)
+			visibles[id] = true;
+
+		std::stringstream title;
+		title << "Shader " << id;
+
+		bool open = visibles[id];
+		// Fenster anzeigen mit ImGui, Sichtbarkeitsstatus verlinken
+		if (ImGui::Begin(title.str().c_str(), &open)) {
+			// Bild zeichnen (wenn vorhanden)
+			ImVec2 size = ImGui::GetContentRegionAvail();
+			ImGui::Image((void*)(intptr_t)id, size);
+			ImGui::End();
+
+		}
+		visibles[id] = open;
+
+		// Fenster wurde vom Benutzer geschlossen → Shader entfernen
+		if (!open)
+			shadersToDelete.push_back(id);
+	}
+
+	// Shader und Texturen entfernen, wenn geschlossen
+	for (auto id : shadersToDelete) {
+		auto it = computeShaders.find(id);
+		if (it != computeShaders.end()) {
+			if (currentShader == it->second)
+				currentShader = nullptr;
+
+			delete it->second;
+			computeShaders.erase(it);
+		}
+
+		auto texIt = std::find_if(texture_list.begin(), texture_list.end(), [id](unsigned int* texPtr) {
+			return *texPtr == id;
+			});
+
+		if (texIt != texture_list.end()) {
+			glDeleteTextures(1, *texIt);
+			texture_list.erase(texIt);
+			// delete* texIt;
+			visibles[id] = false;
+		}
+
+	}
+}
+
+void QueryLimits()
+{
+	// query limitations
+	// -----------------
+	int max_compute_work_group_count[3];
+	int max_compute_work_group_size[3];
+	int max_compute_work_group_invocations;
+
+	for (int idx = 0; idx < 3; idx++)
+	{
+		glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_COUNT, idx, &max_compute_work_group_count[idx]);
+		glGetIntegeri_v(GL_MAX_COMPUTE_WORK_GROUP_SIZE, idx, &max_compute_work_group_size[idx]);
+	}
+	glGetIntegerv(GL_MAX_COMPUTE_WORK_GROUP_INVOCATIONS, &max_compute_work_group_invocations);
+
+	std::cout << "OpenGL Limitations: " << std::endl;
+	std::cout << "maximum number of work groups in X dimension " << max_compute_work_group_count[0] << std::endl;
+	std::cout << "maximum number of work groups in Y dimension " << max_compute_work_group_count[1] << std::endl;
+	std::cout << "maximum number of work groups in Z dimension " << max_compute_work_group_count[2] << std::endl;
+
+	std::cout << "maximum size of a work group in X dimension " << max_compute_work_group_size[0] << std::endl;
+	std::cout << "maximum size of a work group in Y dimension " << max_compute_work_group_size[1] << std::endl;
+	std::cout << "maximum size of a work group in Z dimension " << max_compute_work_group_size[2] << std::endl;
+
+	std::cout << "Number of invocations in a single local work group that may be dispatched to a compute shader " << max_compute_work_group_invocations << std::endl;
+}
+
+void InitUI()
+{
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	(void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+	editorFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\consola.ttf", 18.0f);
+	defaultFont = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\arial.ttf", 18.0f);
+
+	// Setup Dear ImGui style
+	ImGui::StyleColorsDark();
+	// ImGui::StyleColorsLight();
+
+	// Setup Platform/Renderer backends
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init("#version 450");
+}
+
+int InitGL(bool& retFlag)
+{
+	retFlag = true;
+	texture_list = std::vector<unsigned int*>();
+
+	// glfw: initialize and configure
+	// ------------------------------
+	glfwInit();
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+#ifdef __APPLE__
+	glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+#endif
+
+	// glfw window creation
+	// --------------------
+	window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "gputracer", NULL, NULL);
+	if (window == nullptr)
+	{
+		std::cout << "Failed to create GLFW window" << std::endl;
+		glfwTerminate();
+		return -1;
+	}
+
+	glfwMakeContextCurrent(window);
+	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+	glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetScrollCallback(window, scroll_callback);
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
+	glfwSwapInterval(0);
+
+	// glad: load all OpenGL function pointers
+	// ---------------------------------------
+	if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+	{
+		std::cout << "Failed to initialize GLAD" << std::endl;
+		return -1;
+	}
+	retFlag = false;
+	return {};
 }
 
 
@@ -480,7 +534,7 @@ void processInput(GLFWwindow* window)
 		recompileShader();
 	if (glfwGetKey(window, GLFW_KEY_F11) == GLFW_PRESS)
 	{
-		saveImage(-1, * texture_list.at(texture_list.size() - 1));
+		saveImage(-1, *texture_list.at(texture_list.size() - 1));
 	}
 
 }
@@ -528,9 +582,9 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 void recompileShader() {
 	if (currentShader != nullptr) {
-		currentShader->computeCode = editor->GetText().c_str();		
+		currentShader->computeCode = editor->GetText().c_str();
 		createErrorMarkers(currentShader->compile());
-	}		
+	}
 }
 
 glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& viewportSize) {
@@ -553,15 +607,15 @@ glm::vec2 calculateNewImageSize(const glm::vec2& imageSize, const glm::vec2& vie
 void saveImage(int frame, unsigned int texture) {
 
 	GLint width, height;
-	glActiveTexture(GL_TEXTURE0) ;
-	glBindTexture(GL_TEXTURE_2D,textureColorbuffer);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, textureColorbuffer);
 
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &width);
 	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &height);
 
 	// Allocate buffer
 	unsigned char* buffer = new unsigned char[width * height * 4]; // 4 for RGBA
-	     
+
 	// Read pixels
 	glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, buffer);
 
@@ -617,7 +671,7 @@ void renderMenu() {
 					editor->SetText(templateShader);
 					show_Save_new_file = true;
 
-						
+
 				}
 				catch (std::ifstream::failure& e)
 				{
@@ -628,12 +682,12 @@ void renderMenu() {
 				show_open_file = true;
 			}
 			if (ImGui::MenuItem("Save")) {
-				if(currentShader != nullptr) {
+				if (currentShader != nullptr) {
 					currentShader->save();
 					createErrorMarkers(currentShader->compile());
 				}
 			}
-			if (ImGui::MenuItem("Quit")) {				
+			if (ImGui::MenuItem("Quit")) {
 				exit(0);
 			}
 			ImGui::EndMenu();
@@ -688,10 +742,7 @@ void renderMenu() {
 void renderUI() {
 
 	if (settings_open) {
-		if (!ImGui::Begin("Settings", &settings_open)) {
-			ImGui::End();
-		}
-		else {
+		if (ImGui::Begin("Settings", &settings_open)) {			
 			if (ImGui::DragFloat("Specular strength", (float*)&specStrength))
 			{
 			}
@@ -703,41 +754,37 @@ void renderUI() {
 			}
 			ImGui::End();
 		}
+		else {
+		}
 	}
 
 	if (texture_slots_open) {
-		if (!ImGui::Begin("Texture slots", &texture_slots_open)) {
+		if (ImGui::Begin("Texture slots", &texture_slots_open)) {			
+			ImGui::Columns(4, NULL);
+			ImGui::Separator();
+
+			for (int i = 0; i < texture_list.size(); i++) {
+				if (i > 0 && i % 4 == 0) {
+					ImGui::Separator();
+				}
+				vec2 imageSize = vec2(128, 128);
+
+				ImGui::Image((void*)(intptr_t)*texture_list.at(i), ImVec2(imageSize.x, imageSize.y), { 0, 1 }, { 1, 0 });
+
+				ImGui::NextColumn();
+			}
+			ImGui::Columns(1);
+			ImGui::Separator();
 			ImGui::End();
 		}
-
-		ImGui::Columns(4, NULL);
-		ImGui::Separator();
-
-		for (int i = 0; i < texture_list.size(); i++) {
-			if (i > 0 && i % 4 == 0) {
-				ImGui::Separator();
-			}
-			vec2 imageSize = vec2(128, 128);
-			
-			ImGui::Image((void*)(intptr_t)*texture_list.at(i), ImVec2(imageSize.x, imageSize.y), {0, 1}, {1, 0});
-			
-			ImGui::NextColumn();
-		}
-		ImGui::Columns(1);
-		ImGui::Separator();
-		ImGui::End();
-
 	}
 
 	if (editor_open) {
 		ImGui::PushFont(editorFont);
-		if (!ImGui::Begin("Shader code", &editor_open)) {
+		if (ImGui::Begin("Shader code", &editor_open)) {
+			editor->Render("Shader");
 			ImGui::End();
 		}
-		else {
-			editor->Render("Shader");
-		}
-		ImGui::End();
 		ImGui::PopFont();
 	}
 
@@ -756,40 +803,7 @@ void renderUI() {
 				std::string filePathName = ImGuiFileDialog::Instance()->GetFilePathName();
 				std::string filePath = ImGuiFileDialog::Instance()->GetCurrentPath();
 				// action
-
-				std::filesystem::path pathObj(filePathName);
-				std::string fileName = pathObj.stem().string();
-				
-				std::filesystem::path channel0Path(filePath + "/" + fileName + "_channel0.comp");
-
-				if (std::filesystem::exists(channel0Path)) {
-					channel0Tex = 0;
-					addTexture(&channel0Tex);
-					ComputeShader* shader = new ComputeShader(channel0Path.string().c_str(), channel0Tex);
-					shader->compile();
-					computeShaders.insert({ channel0Tex,shader });
-				}
-
-				std::filesystem::path channel1Path(filePath + "/" + fileName + "_channel1.comp");
-
-				if (std::filesystem::exists(channel1Path)) {
-					channel1Tex = 0;
-					addTexture(&channel1Tex);
-					ComputeShader* shader = new ComputeShader(channel1Path.string().c_str(), channel1Tex);
-					shader->compile();
-					computeShaders.insert({ channel1Tex,shader });
-				}
-
-				unsigned int* id = new unsigned int;
-
-				addTexture(id);
-
-				ComputeShader* shader = new ComputeShader(filePathName.c_str(), *id);
-				shader->compile();
-				computeShaders.insert({ *id,shader });
-				editor->SetText(computeShaders[*id]->computeCode);
-
-				currentShader = shader;
+				load(filePath, filePathName);
 			}
 
 			// close
@@ -841,13 +855,51 @@ void renderUI() {
 		}
 
 	}
+	shaderBrowser->renderUI();
 
+}
+
+void load(const std::string& filePath, const std::string& filePathName) {
+	std::filesystem::path pathObj(filePathName);
+	std::string fileName = pathObj.stem().string();
+
+	std::filesystem::path channel0Path(filePath + "/" + fileName + "_channel0.comp");
+
+	if (std::filesystem::exists(channel0Path)) {
+		addTexture(&channel0Tex);
+		ComputeShader* shader = new ComputeShader(channel0Path.string().c_str(), channel0Tex);
+		shader->compile();
+		computeShaders.insert({ channel0Tex,shader });
+	}
+
+	std::filesystem::path channel1Path(filePath + "/" + fileName + "_channel1.comp");
+
+	if (std::filesystem::exists(channel1Path)) {
+		addTexture(&channel1Tex);
+		ComputeShader* shader = new ComputeShader(channel1Path.string().c_str(), channel1Tex);
+		shader->compile();
+		computeShaders.insert({ channel1Tex,shader });
+	}
+
+	unsigned int* id = new unsigned int;
+
+	addTexture(id);
+
+	std::filesystem::path mainShaderPath(filePath + "/" + fileName + ".comp");
+
+	ComputeShader* shader = new ComputeShader(mainShaderPath.string().c_str(), *id);
+	shader->compile();
+	computeShaders.insert({ *id,shader });
+	editor->SetText(computeShaders[*id]->computeCode);
+	visibles[*id] = true;
+	currentShader = shader;
 }
 
 
 void addTexture(unsigned int* id) {
-	texture_list.push_back(id);
 	glGenTextures(1, id);
+	std::cerr << "Generated texture ID: " << *id << std::endl;
+	texture_list.push_back(id);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, *id);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
@@ -857,6 +909,8 @@ void addTexture(unsigned int* id) {
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, TEXTURE_WIDTH, TEXTURE_HEIGHT, 0, GL_RGBA, GL_FLOAT, NULL);
 	glBindImageTexture(*id, *id, 0, GL_FALSE, 0, GL_READ_WRITE, GL_RGBA32F);
 }
+
+
 
 void createErrorMarkers(std::vector<std::string> errors) {
 	TextEditor::ErrorMarkers markers;
@@ -874,7 +928,7 @@ void createErrorMarkers(std::vector<std::string> errors) {
 			std::string lineNumber = match[1].str();
 			std::string errorMessage = match[2].str();
 
-			markers.insert(std::make_pair<int, std::string>(std::stoi(lineNumber), errorMessage.c_str()));			
+			markers.insert(std::make_pair<int, std::string>(std::stoi(lineNumber), errorMessage.c_str()));
 		}
 
 	}
@@ -885,7 +939,7 @@ void createErrorMarkers(std::vector<std::string> errors) {
 int quitApplication() {
 	glDeleteTextures(1, &textures[0]);
 	glDeleteProgram(screenQuad.ID);
-	
+
 	if (!fullscreen) {
 		ImGui_ImplOpenGL3_Shutdown();
 		ImGui_ImplGlfw_Shutdown();
@@ -949,4 +1003,15 @@ void createFramebuffer() {
 		std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
 	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
+}
+
+
+uint ToUInt(int r, int g, int b, int a)
+{
+	return (uint)r << 24 | (uint)g << 16 | (uint)b << 8 | (uint)a;
+}
+
+double generateSineWave(double frequency, double amplitude, double time)
+{
+	return amplitude * std::sin(2 * PI * frequency * time);
 }

@@ -5,7 +5,7 @@
 uniform float time;
 
 layout(local_size_x = 16, local_size_y = 16) in;
-layout(rgba8, binding = %BINDING_UNIT%) uniform image2D outputImage;
+layout(rgba8, binding = 3) uniform image2D outputImage;
 
 
 const float PI=3.14159265358979323846;
@@ -69,8 +69,8 @@ void mainImage( out vec4 fragColor, in vec2 fragCoord )
 	vec3 n=normalize(vec3(scene1(hit+h.xyy),scene1(hit+h.yxx),scene1(hit+h.yyx)));
 	float c=(n.x+n.y+n.z)*0.1;
 	vec3 color=vec3(c,c,c)-t*0.0625;
-    //color*=0.6+0.4*rand(vec2(t,t),time); // noise!
-	fragColor=vec4(vec3(c+t*0.08,c+t*0.02,c*1.5-t*0.01)+color*color,1.0);
+    color*=0.6+0.4*rand(vec2(t,t),time); // noise!
+	fragColor=vec4(vec3(c+t*0.02,c+t*0.02,c*1.5-t*0.01)+color*color,1.0);
 	}
 void main() {
   

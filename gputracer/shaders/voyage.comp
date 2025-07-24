@@ -1,0 +1,76 @@
+#version 450
+
+layout(local_size_x = 16, local_size_y = 16) in;
+layout(rgba8, binding = 3) uniform image2D outputImage;
+
+uniform float time;
+
+const float PI = 3.14159265359;
+
+float map(vec3 p) {
+    p = abs(0.5 - fract(p * 0.5));
+    float n = sin(p.x * 2.0 + time * 0.5) * sin(p.y * 2.0) * sin(p.z * 2.0 - time * 0.25);
+    return length(p - 0.25) - 0.15 + n * 0.05;
+}
+
+vec3 getNormal(vec3 p) {
+    float e = 0.001;
+    vec2 h = vec2(e, 0.0);
+    return normalize(vec3(
+        map(p + h.xyy) - map(p - h.xyy),
+        map(p + h.yxy) - map(p - h.yxy),
+        map(p + h.yyx) - map(p - h.yyx)
+    ));
+}
+
+mat3 cameraMatrix(float t) {
+    vec3 forward = normalize(vec3(sin(t * 0.2), sin(t * 0.1) * 0.2, -1.0));
+    vec3 right = normalize(cross(vec3(0.0, 1.0, 0.0), forward));
+    vec3 up = cross(forward, right);
+    return mat3(right, up, forward);
+}
+
+vec3 shade(vec3 p, vec3 ro, vec3 lightPos, float dist) {
+    vec3 n = getNormal(p);
+    vec3 l = normalize(lightPos - p);
+    float diff = clamp(dot(n, l), 0.0, 1.0);
+    float atten = 1.0 / (1.0 + dist * 0.2 + dist * dist * 0.02);
+    float fog = exp(-dist * 0.15);
+    vec3 baseColor = mix(vec3(0.1, 0.1, 0.2), vec3(0.8, 0.9, 1.0), diff);
+    return baseColor * diff * atten * fog;
+}
+
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 iResolution = imageSize(outputImage);
+    vec2 uv = (fragCoord / iResolution) * 2.0 - 1.0;
+    uv.x *= iResolution.x / iResolution.y;
+
+    vec3 ro = vec3(0.0, 0.0, time * 2.0);
+    mat3 cam = cameraMatrix(time);
+    vec3 rd = normalize(cam * vec3(uv, -1.5));
+
+    float t = 0.0;
+    vec3 p;
+    float d;
+    for (int i = 0; i < 96; i++) {
+        p = ro + rd * t;
+        d = map(p);
+        if (d < 0.001) break;
+        t += d * 0.6;
+    }
+
+    vec3 lightPos = ro + cam * vec3(0.0, 0.0, -0.5); // wie Taschenlampe
+    vec3 col = shade(p, ro, lightPos, t);
+    fragColor = vec4(col, 1.0);
+}
+
+void main() {
+    ivec2 pixelCoords = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 dims = imageSize(outputImage);
+    if (pixelCoords.x >= dims.x || pixelCoords.y >= dims.y) return;
+
+    vec4 outColor;
+    mainImage(outColor, vec2(pixelCoords));
+    imageStore(outputImage, pixelCoords, outColor);
+}
+
